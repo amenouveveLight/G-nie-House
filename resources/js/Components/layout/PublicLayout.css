@@ -1,0 +1,15 @@
+/* Public Layout Wrapper */
+.public-layout-root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--color-white, #ffffff);
+  color: var(--color-black, #1a1a1a);
+}
+
+.public-main-content {
+  flex: 1 0 auto;
+  width: 100%;
+  position: relative;
+}

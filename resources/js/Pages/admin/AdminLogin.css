@@ -1,0 +1,268 @@
+/* ============================================
+   Glam'Or Beauty - Admin Login Styles
+   ============================================ */
+
+.admin-login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at top right, #2c2520 0%, #161514 100%);
+  padding: var(--space-xl) var(--space-md);
+  position: relative;
+  overflow: hidden;
+}
+
+.admin-login-backdrop-glow {
+  position: absolute;
+  top: -100px;
+  right: -100px;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(232, 180, 184, 0.15) 0%, rgba(201, 168, 76, 0.08) 50%, transparent 70%);
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(40px);
+}
+
+.admin-login-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--color-white);
+  border-radius: var(--radius-xl);
+  padding: 2.75rem 2.25rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 2;
+  border: 1px solid rgba(201, 168, 76, 0.25);
+  animation: slideUp 0.35s ease;
+}
+
+.admin-login-header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.admin-login-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-gold-pale);
+  color: var(--color-gold-dark);
+  padding: 0.35rem 0.85rem;
+  border-radius: var(--radius-full);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(201, 168, 76, 0.2);
+}
+
+.admin-login-title {
+  font-family: var(--font-heading);
+  font-size: 2.1rem;
+  color: var(--color-black);
+  margin-bottom: 0.25rem;
+  letter-spacing: -0.5px;
+}
+
+.admin-login-subtitle {
+  color: var(--color-gray);
+  font-size: 0.95rem;
+  font-weight: 400;
+}
+
+.admin-login-divider {
+  width: 50px;
+  height: 3px;
+  background: var(--color-gold);
+  margin: 1rem auto 0;
+  border-radius: var(--radius-full);
+}
+
+.admin-login-alert {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: var(--color-error-light);
+  color: var(--color-error);
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  margin-bottom: 1.5rem;
+  border-left: 4px solid var(--color-error);
+}
+
+.admin-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-login-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.admin-login-group label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-black-light);
+}
+
+.admin-login-input-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.admin-login-input-wrap .input-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--color-gray);
+  pointer-events: none;
+  transition: color var(--transition-fast);
+}
+
+.admin-login-input-wrap input {
+  padding-left: 2.85rem;
+  height: 48px;
+  font-size: 0.95rem;
+  border: 1.5px solid var(--color-gray-light);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-base);
+}
+
+.admin-login-input-wrap input:focus {
+  border-color: var(--color-rose-dark);
+  box-shadow: 0 0 0 4px var(--color-rose-light);
+}
+
+.admin-login-input-wrap input:focus + .input-icon,
+.admin-login-input-wrap:focus-within .input-icon {
+  color: var(--color-rose-dark);
+}
+
+.admin-login-submit {
+  margin-top: 0.75rem;
+  height: 50px;
+  background: var(--color-black);
+  color: var(--color-white);
+  border-radius: var(--radius-md);
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.65rem;
+  cursor: pointer;
+  border: 1px solid rgba(201, 168, 76, 0.4);
+  transition: all var(--transition-base);
+}
+
+.admin-login-submit:hover:not(:disabled) {
+  background: #000;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  border-color: var(--color-gold);
+}
+
+.admin-login-submit:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+/* Demo accounts badge area */
+.admin-login-demo-section {
+  margin-top: 2rem;
+  padding: 1.25rem;
+  background: var(--color-cream);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--color-gray-light);
+}
+
+.demo-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-black);
+  margin-bottom: 0.25rem;
+}
+
+.demo-hint {
+  font-size: 0.8rem;
+  color: var(--color-gray);
+  margin-bottom: 0.85rem;
+}
+
+.demo-buttons {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+}
+
+.demo-pill {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem 0.4rem;
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-light);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.demo-pill:hover {
+  border-color: var(--color-gold);
+  background: var(--color-gold-pale);
+  transform: translateY(-1px);
+}
+
+.demo-pill .demo-role {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.demo-pill code {
+  font-size: 0.72rem;
+  color: var(--color-gray);
+  margin-top: 2px;
+}
+
+.demo-pill.admin:hover {
+  border-color: var(--color-gold);
+}
+
+.demo-pill.manager:hover {
+  border-color: var(--color-rose-dark);
+}
+
+.demo-pill.employee:hover {
+  border-color: var(--color-info);
+}
+
+.admin-login-footer {
+  margin-top: 1.5rem;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--color-gray);
+}
+
+@media (max-width: 480px) {
+  .admin-login-card {
+    padding: 2rem 1.5rem;
+  }
+  .demo-buttons {
+    grid-template-columns: 1fr;
+  }
+  .admin-login-title {
+    font-size: 1.75rem;
+  }
+}

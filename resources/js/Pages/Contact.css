@@ -1,0 +1,512 @@
+/* ============================================
+   GLAM'OR BEAUTY - CONTACT PAGE STYLES
+   ============================================ */
+
+.contact-page {
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--color-white);
+}
+
+/* 1. HERO */
+.contact-hero {
+  background: radial-gradient(circle at 50% 25%, #2a1e23 0%, #161415 70%, #0d0c0d 100%);
+  color: var(--color-white);
+  padding: 5rem 1.5rem 4rem;
+  text-align: center;
+}
+
+.contact-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(232, 180, 184, 0.12);
+  border: 1px solid rgba(232, 180, 184, 0.25);
+  padding: 0.45rem 1.25rem;
+  border-radius: var(--radius-full);
+  color: var(--color-rose-light);
+  font-size: 0.85rem;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 1.25rem;
+}
+
+.contact-title {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 5vw, 3.75rem);
+  font-weight: 700;
+  margin-bottom: 1rem;
+}
+
+.contact-subtitle {
+  font-size: clamp(1rem, 1.8vw, 1.15rem);
+  color: rgba(255, 255, 255, 0.8);
+  max-width: 650px;
+  margin: 0 auto;
+  line-height: 1.6;
+}
+
+/* 2. GRID LAYOUT */
+.contact-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 3rem;
+  align-items: flex-start;
+}
+
+/* FORM CARD */
+.contact-form-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-light);
+  border-radius: var(--radius-xl);
+  padding: 2.75rem 2.25rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.card-header-block {
+  margin-bottom: 2rem;
+}
+
+.form-heading {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
+  font-weight: 700;
+  color: var(--color-black);
+  margin-bottom: 0.4rem;
+}
+
+.form-subheading {
+  font-size: 0.95rem;
+  color: var(--color-gray);
+  line-height: 1.5;
+}
+
+.contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+}
+
+.form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.form-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.required-star {
+  color: var(--color-rose-dark);
+}
+
+.form-input {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--color-gray-light);
+  border-radius: var(--radius-md);
+  font-size: 0.95rem;
+  color: var(--color-black);
+  background: var(--color-white);
+  outline: none;
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.form-input:focus {
+  border-color: var(--color-gold);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+
+.input-error {
+  border-color: var(--color-error) !important;
+}
+
+.field-error-text {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-error);
+  margin-top: 0.2rem;
+}
+
+.form-select {
+  cursor: pointer;
+  background-color: var(--color-white);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+.submit-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.9rem 2rem;
+  font-size: 1rem;
+  border-radius: var(--radius-full);
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+
+.submit-btn.submitting {
+  opacity: 0.75;
+  cursor: wait;
+}
+
+/* DETAILS COLUMN */
+.contact-details-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.details-card {
+  background: var(--color-white);
+  border: 1px solid var(--color-gray-light);
+  border-radius: var(--radius-xl);
+  padding: 2rem;
+  box-shadow: var(--shadow-sm);
+}
+
+.details-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--color-black);
+  margin-bottom: 1.5rem;
+}
+
+.contact-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.15rem;
+  margin-bottom: 1.35rem;
+}
+
+.contact-item-icon {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--color-rose-pale);
+  color: var(--color-rose-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.contact-item-label {
+  display: block;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: var(--color-gray);
+  letter-spacing: 0.05em;
+  margin-bottom: 0.2rem;
+}
+
+.contact-item-val {
+  font-size: 0.95rem;
+  color: var(--color-black);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.link-val {
+  text-decoration: none;
+  transition: color var(--transition-fast);
+}
+
+.link-val:hover {
+  color: var(--color-rose-dark);
+}
+
+.contact-item-secondary {
+  font-size: 0.825rem;
+  color: var(--color-gray);
+  margin-top: 0.2rem;
+}
+
+/* SOCIAL BLOCK */
+.social-links-block {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-gray-lighter);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.social-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-black);
+}
+
+.social-icons-row {
+  display: flex;
+  gap: 0.65rem;
+}
+
+.social-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  background: var(--color-cream);
+  color: var(--color-black);
+  transition: all var(--transition-fast);
+}
+
+.social-btn:hover {
+  transform: translateY(-3px);
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+.social-btn.instagram:hover {
+  background: #e1306c;
+  color: white;
+}
+
+.social-btn.facebook:hover {
+  background: #1877f2;
+  color: white;
+}
+
+.social-btn.whatsapp:hover {
+  background: #25d366;
+  color: white;
+}
+
+/* HOURS CARD */
+.hours-card-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  margin-bottom: 1.25rem;
+}
+
+.hours-icon {
+  color: var(--color-gold);
+}
+
+.hours-card .details-card-title {
+  margin-bottom: 0;
+}
+
+.hours-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.hours-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px dashed var(--color-gray-lighter);
+  font-size: 0.9rem;
+}
+
+.hours-row:last-child {
+  border-bottom: none;
+}
+
+.day-name {
+  color: var(--color-black);
+  font-weight: 500;
+}
+
+.day-hours {
+  color: var(--color-gray-dark);
+  font-weight: 600;
+}
+
+.closed-day .day-hours {
+  color: var(--color-rose-dark);
+  font-weight: 500;
+}
+
+/* BOOKING CTA CARD */
+.booking-cta-card {
+  background: linear-gradient(135deg, #2b1f24 0%, #1a1617 100%);
+  color: var(--color-white);
+  border: none;
+}
+
+.booking-cta-title {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.6rem;
+  line-height: 1.35;
+}
+
+.booking-cta-desc {
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.6;
+  margin-bottom: 1.5rem;
+}
+
+.booking-cta-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-full);
+}
+
+/* 3. MAP PLACEHOLDER */
+.map-placeholder-card {
+  position: relative;
+  border-radius: var(--radius-xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--color-gray-light);
+  min-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.map-artistic-bg {
+  position: absolute;
+  inset: 0;
+  background-color: #211e20;
+  overflow: hidden;
+}
+
+.map-grid-pattern {
+  position: absolute;
+  inset: 0;
+  background-image: 
+    linear-gradient(rgba(232, 180, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(232, 180, 184, 0.08) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+.map-pin-pulse {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pin-circle {
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-full);
+  background: var(--color-rose-dark);
+  color: var(--color-white);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 25px rgba(212, 149, 154, 0.6);
+  z-index: 2;
+}
+
+.pin-ripple {
+  position: absolute;
+  width: 100px;
+  height: 100px;
+  border-radius: var(--radius-full);
+  border: 2px solid var(--color-rose);
+  animation: pulseRipple 2s infinite;
+  opacity: 0.6;
+}
+
+.map-overlay-info {
+  position: relative;
+  z-index: 10;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  padding: 2rem;
+  border-radius: var(--radius-xl);
+  max-width: 550px;
+  margin: 6rem 1.5rem 2rem;
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+}
+
+.map-salon-name {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--color-black);
+  margin-bottom: 0.35rem;
+}
+
+.map-salon-address {
+  font-size: 0.95rem;
+  color: var(--color-gray-dark);
+  margin-bottom: 1.25rem;
+}
+
+.map-badges-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.map-badge {
+  background: var(--color-cream);
+  color: var(--color-black);
+  font-size: 0.775rem;
+  font-weight: 500;
+  padding: 0.3rem 0.75rem;
+  border-radius: var(--radius-full);
+}
+
+.map-directions-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: var(--radius-full);
+  padding: 0.65rem 1.75rem;
+  text-decoration: none;
+}
+
+@keyframes pulseRipple {
+  0% { transform: scale(0.6); opacity: 0.8; }
+  100% { transform: scale(1.6); opacity: 0; }
+}
+
+@media (max-width: 900px) {
+  .contact-grid {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .form-row-2 {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,113 @@
+/* ConfirmDialog Styles */
+.confirm-dialog-body {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  padding: 0.25rem 0;
+}
+
+.confirm-icon-wrapper {
+  flex-shrink: 0;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.confirm-icon-wrapper.danger {
+  background-color: var(--color-error-light, #fee2e2);
+  color: var(--color-error, #ef4444);
+}
+
+.confirm-icon-wrapper.warning {
+  background-color: var(--color-warning-light, #fef3c7);
+  color: var(--color-warning, #f59e0b);
+}
+
+.confirm-icon-wrapper.info {
+  background-color: var(--color-gold-pale, #faf6eb);
+  color: var(--color-gold, #c9a84c);
+}
+
+.confirm-message-text {
+  flex: 1;
+  font-size: 0.95rem;
+  color: var(--color-black-light, #2d2d2d);
+  line-height: 1.5;
+}
+
+.confirm-message-text p {
+  margin: 0;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.btn-dialog-cancel {
+  background-color: var(--color-white, #ffffff);
+  border: 1px solid var(--color-gray-light, #e5e7eb);
+  color: var(--color-gray-dark, #374151);
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-body, 'Poppins', sans-serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-dialog-cancel:hover:not(:disabled) {
+  background-color: var(--color-cream, #f8f6f3);
+  border-color: var(--color-gray, #6b7280);
+}
+
+.btn-dialog-confirm {
+  border: none;
+  padding: 0.6rem 1.35rem;
+  border-radius: var(--radius-full, 9999px);
+  font-family: var(--font-body, 'Poppins', sans-serif);
+  font-size: 0.88rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--color-white, #ffffff);
+  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.btn-dialog-confirm:disabled,
+.btn-dialog-cancel:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-dialog-danger {
+  background-color: var(--color-error, #ef4444);
+}
+
+.btn-dialog-danger:hover:not(:disabled) {
+  background-color: #dc2626;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+}
+
+.btn-dialog-warning {
+  background-color: var(--color-warning, #f59e0b);
+}
+
+.btn-dialog-warning:hover:not(:disabled) {
+  background-color: #d97706;
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-dialog-info {
+  background-color: var(--color-black, #1a1a1a);
+}
+
+.btn-dialog-info:hover:not(:disabled) {
+  background-color: var(--color-gold, #c9a84c);
+  box-shadow: 0 4px 12px rgba(201, 168, 76, 0.3);
+}

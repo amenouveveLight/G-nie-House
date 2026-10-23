@@ -1,0 +1,83 @@
+/* LoadingSpinner Styles */
+.spinner-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  gap: 1rem;
+}
+
+.spinner-fullpage-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Spinner Sizes */
+.spinner-sm .spinner-ring {
+  width: 24px;
+  height: 24px;
+  border-width: 2.5px;
+}
+
+.spinner-md .spinner-ring {
+  width: 44px;
+  height: 44px;
+  border-width: 3.5px;
+}
+
+.spinner-lg .spinner-ring {
+  width: 64px;
+  height: 64px;
+  border-width: 4px;
+}
+
+.spinner-ring {
+  position: relative;
+  border-radius: 50%;
+  border-style: solid;
+  border-color: rgba(201, 168, 76, 0.15);
+  border-top-color: var(--color-gold, #c9a84c);
+  border-right-color: var(--color-rose-dark, #d4959a);
+  animation: spinnerRotate 0.9s cubic-bezier(0.55, 0.15, 0.45, 0.85) infinite;
+}
+
+.spinner-inner {
+  position: absolute;
+  inset: 2px;
+  border-radius: 50%;
+  border: 1px dashed rgba(201, 168, 76, 0.3);
+}
+
+.spinner-message {
+  margin: 0;
+  font-family: var(--font-body, 'Poppins', sans-serif);
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--color-gray-dark, #374151);
+  letter-spacing: 0.02em;
+  text-align: center;
+}
+
+.spinner-sm .spinner-message {
+  font-size: 0.82rem;
+}
+
+.spinner-lg .spinner-message {
+  font-size: 1.05rem;
+}
+
+@keyframes spinnerRotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}

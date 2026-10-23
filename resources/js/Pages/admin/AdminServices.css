@@ -1,0 +1,276 @@
+/* ============================================
+   Glam'Or Beauty - Admin Services Styles
+   ============================================ */
+
+.admin-services-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* Toolbar: Categories + Search */
+.services-toolbar-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  background: var(--color-white);
+  padding: 1.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-gray-light);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.category-tabs-list {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cat-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 1rem;
+  background: var(--color-cream);
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-gray-dark);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cat-tab-btn:hover {
+  background: var(--color-gray-lighter);
+  color: var(--color-black);
+}
+
+.cat-tab-btn.active {
+  background: var(--color-black);
+  color: var(--color-white);
+}
+
+.tab-count {
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  border-radius: var(--radius-full);
+  background: rgba(0, 0, 0, 0.08);
+  font-weight: 700;
+}
+
+.cat-tab-btn.active .tab-count {
+  background: var(--color-gold);
+  color: var(--color-white);
+}
+
+.search-bar-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 320px;
+}
+
+.search-bar-wrap .search-icon {
+  position: absolute;
+  left: 1rem;
+  color: var(--color-gray);
+}
+
+.search-bar-wrap input {
+  padding-left: 2.75rem;
+  padding-right: 2.25rem;
+  height: 44px;
+}
+
+.clear-search-btn {
+  position: absolute;
+  right: 0.75rem;
+  color: var(--color-gray);
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* Services Table */
+.service-img-wrapper {
+  width: 52px;
+  height: 52px;
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--color-gray-light);
+}
+
+.service-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.service-name-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  max-width: 280px;
+}
+
+.service-name-cell strong {
+  font-size: 0.95rem;
+  color: var(--color-black);
+}
+
+.service-desc-snippet {
+  font-size: 0.78rem;
+  color: var(--color-gray);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.badge-cat-coiffure {
+  background: rgba(201, 168, 76, 0.15);
+  color: var(--color-gold-dark);
+}
+
+.badge-cat-manucure {
+  background: rgba(232, 180, 184, 0.2);
+  color: var(--color-rose-dark);
+}
+
+.badge-cat-pedicure {
+  background: rgba(59, 130, 246, 0.12);
+  color: #2563eb;
+}
+
+.service-price-tag {
+  font-size: 0.95rem;
+  color: var(--color-black);
+}
+
+.service-duration-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.82rem;
+  color: var(--color-gray);
+}
+
+.profs-assigned-list {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  max-width: 180px;
+}
+
+.prof-micro-tag {
+  font-size: 0.72rem;
+  background: var(--color-cream);
+  border: 1px solid var(--color-gray-light);
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  color: var(--color-black-light);
+  font-weight: 500;
+}
+
+.status-toggle-btn {
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: transform var(--transition-fast);
+}
+
+.status-toggle-btn:hover {
+  transform: scale(1.05);
+}
+
+.row-inactive {
+  opacity: 0.6;
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.empty-state-cell {
+  text-align: center;
+  padding: 4rem 1.5rem !important;
+  color: var(--color-gray);
+}
+
+.empty-state-cell svg {
+  margin-bottom: 0.75rem;
+  color: var(--color-gray-light);
+}
+
+.empty-state-cell h3 {
+  font-size: 1.25rem;
+  margin-bottom: 0.25rem;
+}
+
+.empty-state-cell p {
+  margin-bottom: 1.25rem;
+  font-size: 0.9rem;
+}
+
+/* Modals & Forms */
+.modal-service-form {
+  max-width: 620px;
+}
+
+.profs-selection-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.75rem;
+  max-height: 150px;
+  overflow-y: auto;
+  padding: 0.25rem;
+}
+
+.prof-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0.6rem 0.85rem;
+  background: var(--color-cream);
+  border: 1.5px solid var(--color-gray-light);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.prof-checkbox-item.checked {
+  background: var(--color-gold-pale);
+  border-color: var(--color-gold);
+}
+
+.prof-checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-gold-dark);
+  cursor: pointer;
+}
+
+.prof-checkbox-item small {
+  color: var(--color-gray);
+  font-size: 0.75rem;
+  margin-left: auto;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .services-toolbar-card {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .search-bar-wrap {
+    min-width: 100%;
+  }
+  .profs-selection-grid {
+    grid-template-columns: 1fr;
+  }
+}
