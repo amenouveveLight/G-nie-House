@@ -23,8 +23,8 @@ import {
   RefreshCw,
   Users
 } from 'lucide-react';
-import { useData } from '../contexts/DataContext';
-import { useToast } from '../contexts/ToastContext';
+import { useData } from '../Contexts/DataContext';
+import { useToast } from '../Contexts/ToastContext';
 import './Booking.css';
 
 const STEPS = [

@@ -16,8 +16,8 @@ import {
   Briefcase,
   AlertCircle
 } from 'lucide-react';
-import { useData } from '../../contexts/DataContext';
-import { useToast } from '../../contexts/ToastContext';
+import { useData } from '../../Contexts/DataContext';
+import { useToast } from '../../Contexts/ToastContext';
 import './AdminStaff.css';
 
 const WEEKDAYS = [

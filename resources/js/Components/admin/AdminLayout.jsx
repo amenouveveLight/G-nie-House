@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
+import ServerHydrator from '../common/ServerHydrator';
 import { NavLink, Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useData } from '../../contexts/DataContext';
-import { useToast } from '../../contexts/ToastContext';
+import { useAuth } from '../../Contexts/AuthContext';
+import { useData } from '../../Contexts/DataContext';
+import { useToast } from '../../Contexts/ToastContext';
 import {
   LayoutDashboard,
   Calendar,
@@ -41,7 +42,7 @@ const ROLE_LABELS = {
   employee: 'Collaboratrice',
 };
 
-export default function AdminLayout() {
+export default function AdminLayout({ children }) {
   const { user, isAuthenticated, logout, hasPermission } = useAuth();
   const { notifications, dispatch } = useData();
   const { info } = useToast();
@@ -76,9 +77,8 @@ export default function AdminLayout() {
   const unreadCount = unreadNotifications.length;
 
   const handleLogout = () => {
-    logout();
     info('Vous êtes déconnecté.');
-    navigate('/admin/login', { replace: true });
+    logout();
   };
 
   const handleMarkAllRead = () => {
@@ -91,6 +91,7 @@ export default function AdminLayout() {
 
   return (
     <div className="admin-root">
+      <ServerHydrator />
       {/* Mobile Backdrop */}
       {mobileMenuOpen && (
         <div

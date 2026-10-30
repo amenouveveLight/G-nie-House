@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, Link, useLocation } from 'react-router-dom';
 import { ShoppingBag, Menu, X, Calendar, Sparkles } from 'lucide-react';
-import { useCart } from '../../contexts/CartContext';
+import { useCart } from '../../Contexts/CartContext';
 import './Header.css';
 
 export default function Header() {

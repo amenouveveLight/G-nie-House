@@ -1,4 +1,5 @@
 import { createContext, useContext, useReducer, useCallback } from 'react';
+import { normalizeCollections, dataScope } from '../Data/normalize';
 import {
   appointments as initialAppointments,
   orders as initialOrders,
@@ -10,41 +11,54 @@ import {
   stockMovements as initialMovements,
   notifications as initialNotifications,
   salonSettings as initialSettings,
-} from '../data/demoData';
+} from '../Data/demoData';
 
 const DataContext = createContext();
 
-const STORAGE_KEY = 'glamor_data';
-
-function loadData() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
-  } catch { /* fall through */ }
-  return {
-    appointments: initialAppointments,
-    orders: initialOrders,
-    transactions: initialTransactions,
-    clients: initialClients,
+// Ces collections sont fournies par le serveur (base de données). Les écritures faites
+// depuis l'interface restent pour l'instant en mémoire (non enregistrées en base).
+// Les données privées démarrent vides ; le catalogue garde un repli de démonstration
+// le temps que les props serveur soient appliquées.
+function buildInitialState(page) {
+  const base = {
+    appointments: [],
+    busySlots: [],
+    orders: [],
+    transactions: [],
+    clients: [],
+    stockMovements: [],
     services: initialServices,
     products: initialProducts,
     professionals: initialProfessionals,
-    stockMovements: initialMovements,
-    notifications: initialNotifications,
     settings: initialSettings,
-    counters: { appointment: initialAppointments.length, order: initialOrders.length, transaction: initialTransactions.length },
+    notifications: initialNotifications,
+    counters: { appointment: 0, order: 0, transaction: 0 },
+    hydrated: {},
   };
+  if (!page) return base;
+  return hydrate(base, normalizeCollections(page.props), dataScope(page.component, page.props));
 }
 
-function saveData(state) {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  } catch { /* silently fail */ }
+/** Applique les collections serveur, une seule fois par collection et par espace (scope),
+ *  pour ne pas écraser les modifications locales pendant la navigation. */
+function hydrate(state, payload, scope) {
+  const next = { ...state, hydrated: { ...state.hydrated }, counters: { ...state.counters } };
+  const counterKeys = { appointments: 'appointment', orders: 'order', transactions: 'transaction' };
+  for (const [key, value] of Object.entries(payload)) {
+    if (next.hydrated[key] === scope) continue;
+    next[key] = value;
+    next.hydrated[key] = scope;
+    if (counterKeys[key]) next.counters[counterKeys[key]] = value.length;
+  }
+  return next;
 }
 
 function dataReducer(state, action) {
   let newState;
   switch (action.type) {
+    case 'HYDRATE':
+      return hydrate(state, action.payload, action.scope);
+
     // === APPOINTMENTS ===
     case 'ADD_APPOINTMENT': {
       const counter = (state.counters.appointment || state.appointments.length) + 1;
@@ -268,19 +282,17 @@ function dataReducer(state, action) {
 
     // === RESET ===
     case 'RESET_DATA':
-      localStorage.removeItem(STORAGE_KEY);
-      return loadData();
+      return buildInitialState(null);
 
     default:
       return state;
   }
 
-  saveData(newState);
   return newState;
 }
 
-export function DataProvider({ children }) {
-  const [state, dispatch] = useReducer(dataReducer, null, loadData);
+export function DataProvider({ children, initialPage }) {
+  const [state, dispatch] = useReducer(dataReducer, initialPage, buildInitialState);
 
   // Helper to find or create client
   const findOrCreateClient = useCallback((clientInfo) => {
@@ -303,7 +315,7 @@ export function DataProvider({ children }) {
 
   // Check slot availability
   const isSlotAvailable = useCallback((professionalId, date, startTime, endTime, excludeAppointmentId = null) => {
-    return !state.appointments.some(apt =>
+    return ![...state.appointments, ...state.busySlots].some(apt =>
       apt.id !== excludeAppointmentId &&
       apt.professionalId === professionalId &&
       apt.date === date &&
@@ -312,7 +324,7 @@ export function DataProvider({ children }) {
        (endTime > apt.startTime && endTime <= apt.endTime) ||
        (startTime <= apt.startTime && endTime >= apt.endTime))
     );
-  }, [state.appointments]);
+  }, [state.appointments, state.busySlots]);
 
   const value = {
     ...state,

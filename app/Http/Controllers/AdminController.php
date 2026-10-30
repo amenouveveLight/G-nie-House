@@ -2,88 +2,99 @@
 
 namespace App\Http\Controllers;
 
-use Inertia\Inertia;
-use Inertia\Response;
-use App\Models\Service;
+use App\Http\Middleware\EnsureModuleAccess;
+use App\Models\Appointment;
+use App\Models\Client;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Professional;
-use App\Models\Appointment;
-use App\Models\Order;
-use App\Models\Client;
-use App\Models\Transaction;
 use App\Models\SalonSetting;
+use App\Models\Service;
+use App\Models\StockMovement;
+use App\Models\Transaction;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AdminController extends Controller
 {
-    public function login(): Response
+    public function dashboard(Request $request): Response
     {
-        return Inertia::render('admin/AdminLogin');
-    }
+        // Le tableau de bord est visible par tous les rôles : les données financières et
+        // clients ne sont envoyées qu'à ceux qui ont accès aux modules correspondants.
+        $role = $request->user()->role;
+        $allowed = fn (string $module) => EnsureModuleAccess::allowed($role, $module);
 
-    public function dashboard(): Response
-    {
         return Inertia::render('admin/Dashboard', [
-            'appointmentsCount' => Appointment::count(),
-            'ordersCount' => Order::count(),
-            'clientsCount' => Client::count(),
-            'servicesCount' => Service::count(),
-            'recentAppointments' => Appointment::with(['client', 'service', 'professional'])->latest()->take(5)->get(),
-            'recentOrders' => Order::with(['client', 'items'])->latest()->take(5)->get(),
+            'appointments' => $this->allAppointments(),
+            'services' => $this->allServices(),
+            'professionals' => $this->allProfessionals(),
+            'products' => $allowed('products') ? $this->allProducts() : [],
+            'orders' => $allowed('orders') ? $this->allOrders() : [],
+            'transactions' => $allowed('payments') ? $this->allTransactions() : [],
+            'clients' => $allowed('clients') ? $this->allClients() : [],
         ]);
     }
 
     public function appointments(): Response
     {
         return Inertia::render('admin/AdminAppointments', [
-            'appointments' => Appointment::with(['client', 'service', 'professional'])->get(),
-            'services' => Service::all(),
-            'professionals' => Professional::all(),
-            'clients' => Client::all(),
+            'appointments' => $this->allAppointments(),
+            'services' => $this->allServices(),
+            'professionals' => $this->allProfessionals(),
+            'clients' => $this->allClients(),
         ]);
     }
 
     public function services(): Response
     {
         return Inertia::render('admin/AdminServices', [
-            'services' => Service::with('professionals')->get(),
-            'professionals' => Professional::all(),
+            'services' => $this->allServices(),
+            'professionals' => $this->allProfessionals(),
         ]);
     }
 
     public function products(): Response
     {
         return Inertia::render('admin/AdminProducts', [
-            'products' => Product::all(),
+            'products' => $this->allProducts(),
+            'stockMovements' => StockMovement::orderBy('created_at')->get(),
         ]);
     }
 
     public function orders(): Response
     {
         return Inertia::render('admin/AdminOrders', [
-            'orders' => Order::with(['client', 'items.product', 'transaction'])->latest()->get(),
+            'orders' => $this->allOrders(),
+            'clients' => $this->allClients(),
         ]);
     }
 
     public function payments(): Response
     {
         return Inertia::render('admin/AdminPayments', [
-            'transactions' => Transaction::with('order.client')->latest()->get(),
+            'transactions' => $this->allTransactions(),
+            'orders' => $this->allOrders(),
+            'clients' => $this->allClients(),
         ]);
     }
 
     public function clients(): Response
     {
         return Inertia::render('admin/AdminClients', [
-            'clients' => Client::withCount(['appointments', 'orders'])->get(),
+            'clients' => $this->allClients(),
+            'appointments' => $this->allAppointments(),
+            'orders' => $this->allOrders(),
         ]);
     }
 
     public function staff(): Response
     {
         return Inertia::render('admin/AdminStaff', [
-            'staff' => Professional::with('services')->get(),
-            'services' => Service::all(),
+            'professionals' => $this->allProfessionals(),
+            'services' => $this->allServices(),
+            'appointments' => $this->allAppointments(),
         ]);
     }
 
@@ -92,5 +103,40 @@ class AdminController extends Controller
         return Inertia::render('admin/AdminSettings', [
             'settings' => SalonSetting::pluck('value', 'key'),
         ]);
+    }
+
+    private function allAppointments(): Collection
+    {
+        return Appointment::orderBy('date')->orderBy('start_time')->get();
+    }
+
+    private function allServices(): Collection
+    {
+        return Service::with('professionals:id')->get();
+    }
+
+    private function allProfessionals(): Collection
+    {
+        return Professional::with('services:id')->get();
+    }
+
+    private function allProducts(): Collection
+    {
+        return Product::all();
+    }
+
+    private function allOrders(): Collection
+    {
+        return Order::with('items')->get();
+    }
+
+    private function allTransactions(): Collection
+    {
+        return Transaction::orderBy('created_at')->get();
+    }
+
+    private function allClients(): Collection
+    {
+        return Client::all();
     }
 }

@@ -20,8 +20,8 @@ import {
   AlertTriangle,
   ArrowRight
 } from 'lucide-react';
-import { useData } from '../../contexts/DataContext';
-import { useToast } from '../../contexts/ToastContext';
+import { useData } from '../../Contexts/DataContext';
+import { useToast } from '../../Contexts/ToastContext';
 import './AdminOrders.css';
 
 const ORDER_STATUSES = [

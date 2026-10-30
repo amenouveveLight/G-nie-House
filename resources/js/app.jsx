@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
 import '../css/app.css';
 
 import { CartProvider } from './Contexts/CartContext';
-import { AuthProvider } from './Contexts/AuthContext';
 import { DataProvider } from './Contexts/DataContext';
 import { ToastProvider } from './Contexts/ToastContext';
 import PublicLayout from './Components/layout/PublicLayout';
@@ -36,14 +35,12 @@ createInertiaApp({
   },
   setup({ el, App, props }) {
     createRoot(el).render(
-      <DataProvider>
-        <AuthProvider>
-          <CartProvider>
-            <ToastProvider>
-              <App {...props} />
-            </ToastProvider>
-          </CartProvider>
-        </AuthProvider>
+      <DataProvider initialPage={props.initialPage}>
+        <CartProvider>
+          <ToastProvider>
+            <App {...props} />
+          </ToastProvider>
+        </CartProvider>
       </DataProvider>
     );
   },

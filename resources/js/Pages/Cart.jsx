@@ -14,9 +14,9 @@ import {
   AlertCircle,
   Check
 } from 'lucide-react';
-import { useCart } from '../contexts/CartContext';
-import { useData } from '../contexts/DataContext';
-import { useToast } from '../contexts/ToastContext';
+import { useCart } from '../Contexts/CartContext';
+import { useData } from '../Contexts/DataContext';
+import { useToast } from '../Contexts/ToastContext';
 import './Cart.css';
 
 export default function Cart() {

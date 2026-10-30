@@ -1,0 +1,3639 @@
+diff --git a/.env.example b/.env.example
+index 40bb13b..5dfc2e5 100644
+--- a/.env.example
++++ b/.env.example
+@@ -1,12 +1,12 @@
+-APP_NAME=Laravel
++APP_NAME="Glam'Or Beauty"
+ APP_ENV=local
+ APP_KEY=
+ APP_DEBUG=true
+ APP_URL=http://localhost:8000
+ 
+-APP_LOCALE=en
+-APP_FALLBACK_LOCALE=en
+-APP_FAKER_LOCALE=en_US
++APP_LOCALE=fr
++APP_FALLBACK_LOCALE=fr
++APP_FAKER_LOCALE=fr_FR
+ 
+ APP_MAINTENANCE_DRIVER=file
+ # APP_MAINTENANCE_STORE=database
+@@ -20,12 +20,12 @@ LOG_STACK=single
+ LOG_DEPRECATIONS_CHANNEL=null
+ LOG_LEVEL=debug
+ 
+-DB_CONNECTION=sqlite
+-# DB_HOST=127.0.0.1
+-# DB_PORT=3306
+-# DB_DATABASE=laravel
+-# DB_USERNAME=root
+-# DB_PASSWORD=
++DB_CONNECTION=mysql
++DB_HOST=127.0.0.1
++DB_PORT=3306
++DB_DATABASE=glamor_beauty
++DB_USERNAME=root
++DB_PASSWORD=
+ 
+ SESSION_DRIVER=database
+ SESSION_LIFETIME=120
+@@ -63,3 +63,6 @@ AWS_BUCKET=
+ AWS_USE_PATH_STYLE_ENDPOINT=false
+ 
+ VITE_APP_NAME="${APP_NAME}"
++
++# Mot de passe des comptes admin créés par le seeder (sinon généré aléatoirement)
++SEED_PASSWORD=
+diff --git a/app/Http/Controllers/AdminController.php b/app/Http/Controllers/AdminController.php
+index f8a3351..9fab8a4 100644
+--- a/app/Http/Controllers/AdminController.php
++++ b/app/Http/Controllers/AdminController.php
+@@ -2,88 +2,99 @@
+ 
+ namespace App\Http\Controllers;
+ 
+-use Inertia\Inertia;
+-use Inertia\Response;
+-use App\Models\Service;
+-use App\Models\Product;
+-use App\Models\Professional;
++use App\Http\Middleware\EnsureModuleAccess;
+ use App\Models\Appointment;
+-use App\Models\Order;
+ use App\Models\Client;
+-use App\Models\Transaction;
++use App\Models\Order;
++use App\Models\Product;
++use App\Models\Professional;
+ use App\Models\SalonSetting;
++use App\Models\Service;
++use App\Models\StockMovement;
++use App\Models\Transaction;
++use Illuminate\Database\Eloquent\Collection;
+ use Illuminate\Http\Request;
++use Inertia\Inertia;
++use Inertia\Response;
+ 
+ class AdminController extends Controller
+ {
+-    public function login(): Response
++    public function dashboard(Request $request): Response
+     {
+-        return Inertia::render('admin/AdminLogin');
+-    }
++        // Le tableau de bord est visible par tous les rôles : les données financières et
++        // clients ne sont envoyées qu'à ceux qui ont accès aux modules correspondants.
++        $role = $request->user()->role;
++        $allowed = fn (string $module) => EnsureModuleAccess::allowed($role, $module);
+ 
+-    public function dashboard(): Response
+-    {
+         return Inertia::render('admin/Dashboard', [
+-            'appointmentsCount' => Appointment::count(),
+-            'ordersCount' => Order::count(),
+-            'clientsCount' => Client::count(),
+-            'servicesCount' => Service::count(),
+-            'recentAppointments' => Appointment::with(['client', 'service', 'professional'])->latest()->take(5)->get(),
+-            'recentOrders' => Order::with(['client', 'items'])->latest()->take(5)->get(),
++            'appointments' => $this->allAppointments(),
++            'services' => $this->allServices(),
++            'professionals' => $this->allProfessionals(),
++            'products' => $allowed('products') ? $this->allProducts() : [],
++            'orders' => $allowed('orders') ? $this->allOrders() : [],
++            'transactions' => $allowed('payments') ? $this->allTransactions() : [],
++            'clients' => $allowed('clients') ? $this->allClients() : [],
+         ]);
+     }
+ 
+     public function appointments(): Response
+     {
+         return Inertia::render('admin/AdminAppointments', [
+-            'appointments' => Appointment::with(['client', 'service', 'professional'])->get(),
+-            'services' => Service::all(),
+-            'professionals' => Professional::all(),
+-            'clients' => Client::all(),
++            'appointments' => $this->allAppointments(),
++            'services' => $this->allServices(),
++            'professionals' => $this->allProfessionals(),
++            'clients' => $this->allClients(),
+         ]);
+     }
+ 
+     public function services(): Response
+     {
+         return Inertia::render('admin/AdminServices', [
+-            'services' => Service::with('professionals')->get(),
+-            'professionals' => Professional::all(),
++            'services' => $this->allServices(),
++            'professionals' => $this->allProfessionals(),
+         ]);
+     }
+ 
+     public function products(): Response
+     {
+         return Inertia::render('admin/AdminProducts', [
+-            'products' => Product::all(),
++            'products' => $this->allProducts(),
++            'stockMovements' => StockMovement::orderBy('created_at')->get(),
+         ]);
+     }
+ 
+     public function orders(): Response
+     {
+         return Inertia::render('admin/AdminOrders', [
+-            'orders' => Order::with(['client', 'items.product', 'transaction'])->latest()->get(),
++            'orders' => $this->allOrders(),
++            'clients' => $this->allClients(),
+         ]);
+     }
+ 
+     public function payments(): Response
+     {
+         return Inertia::render('admin/AdminPayments', [
+-            'transactions' => Transaction::with('order.client')->latest()->get(),
++            'transactions' => $this->allTransactions(),
++            'orders' => $this->allOrders(),
++            'clients' => $this->allClients(),
+         ]);
+     }
+ 
+     public function clients(): Response
+     {
+         return Inertia::render('admin/AdminClients', [
+-            'clients' => Client::withCount(['appointments', 'orders'])->get(),
++            'clients' => $this->allClients(),
++            'appointments' => $this->allAppointments(),
++            'orders' => $this->allOrders(),
+         ]);
+     }
+ 
+     public function staff(): Response
+     {
+         return Inertia::render('admin/AdminStaff', [
+-            'staff' => Professional::with('services')->get(),
+-            'services' => Service::all(),
++            'professionals' => $this->allProfessionals(),
++            'services' => $this->allServices(),
++            'appointments' => $this->allAppointments(),
+         ]);
+     }
+ 
+@@ -93,4 +104,39 @@ public function settings(): Response
+             'settings' => SalonSetting::pluck('value', 'key'),
+         ]);
+     }
++
++    private function allAppointments(): Collection
++    {
++        return Appointment::orderBy('date')->orderBy('start_time')->get();
++    }
++
++    private function allServices(): Collection
++    {
++        return Service::with('professionals:id')->get();
++    }
++
++    private function allProfessionals(): Collection
++    {
++        return Professional::with('services:id')->get();
++    }
++
++    private function allProducts(): Collection
++    {
++        return Product::all();
++    }
++
++    private function allOrders(): Collection
++    {
++        return Order::with('items')->get();
++    }
++
++    private function allTransactions(): Collection
++    {
++        return Transaction::orderBy('created_at')->get();
++    }
++
++    private function allClients(): Collection
++    {
++        return Client::all();
++    }
+ }
+diff --git a/app/Http/Controllers/AuthController.php b/app/Http/Controllers/AuthController.php
+new file mode 100644
+index 0000000..d2c7f67
+--- /dev/null
++++ b/app/Http/Controllers/AuthController.php
+@@ -0,0 +1,45 @@
++<?php
++
++namespace App\Http\Controllers;
++
++use Illuminate\Http\RedirectResponse;
++use Illuminate\Http\Request;
++use Illuminate\Support\Facades\Auth;
++use Illuminate\Validation\ValidationException;
++use Inertia\Inertia;
++use Inertia\Response;
++
++class AuthController extends Controller
++{
++    public function showLogin(): Response
++    {
++        return Inertia::render('admin/AdminLogin');
++    }
++
++    public function login(Request $request): RedirectResponse
++    {
++        $credentials = $request->validate([
++            'email' => ['required', 'email'],
++            'password' => ['required', 'string'],
++        ]);
++
++        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
++            throw ValidationException::withMessages([
++                'email' => 'Identifiants incorrects. Veuillez réessayer.',
++            ]);
++        }
++
++        $request->session()->regenerate();
++
++        return redirect()->intended(route('admin.dashboard'));
++    }
++
++    public function logout(Request $request): RedirectResponse
++    {
++        Auth::logout();
++        $request->session()->invalidate();
++        $request->session()->regenerateToken();
++
++        return redirect()->route('admin.login');
++    }
++}
+diff --git a/app/Http/Controllers/PublicController.php b/app/Http/Controllers/PublicController.php
+index 46cccef..748433b 100644
+--- a/app/Http/Controllers/PublicController.php
++++ b/app/Http/Controllers/PublicController.php
+@@ -2,67 +2,74 @@
+ 
+ namespace App\Http\Controllers;
+ 
+-use Inertia\Inertia;
+-use Inertia\Response;
+-use App\Models\Service;
++use App\Models\Appointment;
+ use App\Models\Product;
+ use App\Models\Professional;
+ use App\Models\SalonSetting;
+-use Illuminate\Http\Request;
++use App\Models\Service;
++use Inertia\Inertia;
++use Inertia\Response;
+ 
+ class PublicController extends Controller
+ {
+     public function home(): Response
+     {
+-        return Inertia::render('Home', [
+-            'services' => Service::where('status', 'active')->get(),
+-            'products' => Product::where('status', 'active')->where('featured', true)->get(),
+-        ]);
++        return $this->page('Home');
+     }
+ 
+     public function about(): Response
+     {
+-        return Inertia::render('About', [
+-            'professionals' => Professional::where('status', 'active')->get(),
+-        ]);
++        return $this->page('About');
+     }
+ 
+     public function services(): Response
+     {
+-        return Inertia::render('Services', [
+-            'services' => Service::where('status', 'active')->with('professionals')->get(),
+-        ]);
++        return $this->page('Services');
+     }
+ 
+     public function shop(): Response
+     {
+-        return Inertia::render('Shop', [
+-            'products' => Product::where('status', 'active')->get(),
+-        ]);
++        return $this->page('Shop');
+     }
+ 
+     public function contact(): Response
+     {
+-        return Inertia::render('Contact', [
+-            'settings' => SalonSetting::pluck('value', 'key'),
+-        ]);
++        return $this->page('Contact');
+     }
+ 
+     public function booking(): Response
+     {
+-        return Inertia::render('Booking', [
+-            'services' => Service::where('status', 'active')->with('professionals')->get(),
+-            'professionals' => Professional::where('status', 'active')->get(),
+-        ]);
++        return $this->page('Booking');
+     }
+ 
+     public function cart(): Response
+     {
+-        return Inertia::render('Cart');
++        return $this->page('Cart');
+     }
+ 
+     public function checkout(): Response
+     {
+-        return Inertia::render('Checkout');
++        return $this->page('Checkout');
++    }
++
++    /**
++     * Toutes les pages publiques partagent le même jeu de données (catalogue, équipe,
++     * réglages du salon). Aucune donnée personnelle n'est exposée : ni coordonnées des
++     * professionnelles, ni identité des clientes — les rendez-vous existants ne sont
++     * envoyés que sous forme de créneaux occupés.
++     */
++    private function page(string $component): Response
++    {
++        return Inertia::render($component, [
++            'services' => Service::where('status', 'active')->with('professionals:id')->get(),
++            'professionals' => Professional::where('status', 'active')
++                ->with('services:id')
++                ->get(['id', 'name', 'role', 'specialties', 'photo', 'status', 'working_hours', 'breaks', 'days_off', 'blocked_slots']),
++            'products' => Product::where('status', 'active')->get(),
++            'settings' => SalonSetting::pluck('value', 'key'),
++            'busySlots' => Appointment::where('status', '!=', 'cancelled')
++                ->whereDate('date', '>=', now()->toDateString())
++                ->get(['id', 'professional_id', 'date', 'start_time', 'end_time', 'status']),
++        ]);
+     }
+ }
+diff --git a/app/Http/Middleware/EnsureModuleAccess.php b/app/Http/Middleware/EnsureModuleAccess.php
+new file mode 100644
+index 0000000..721eb46
+--- /dev/null
++++ b/app/Http/Middleware/EnsureModuleAccess.php
+@@ -0,0 +1,31 @@
++<?php
++
++namespace App\Http\Middleware;
++
++use Closure;
++use Illuminate\Http\Request;
++use Symfony\Component\HttpFoundation\Response;
++
++class EnsureModuleAccess
++{
++    /** Modules accessibles par rôle (admin = tout). */
++    public const ROLE_MODULES = [
++        'admin' => ['*'],
++        'manager' => ['dashboard', 'appointments', 'services', 'products', 'orders', 'payments', 'clients', 'staff'],
++        'employee' => ['dashboard', 'appointments'],
++    ];
++
++    public static function allowed(?string $role, string $module): bool
++    {
++        $modules = self::ROLE_MODULES[$role] ?? [];
++
++        return in_array('*', $modules, true) || in_array($module, $modules, true);
++    }
++
++    public function handle(Request $request, Closure $next, string $module): Response
++    {
++        abort_unless(self::allowed($request->user()?->role, $module), 403, 'Accès non autorisé.');
++
++        return $next($request);
++    }
++}
+diff --git a/app/Http/Middleware/HandleInertiaRequests.php b/app/Http/Middleware/HandleInertiaRequests.php
+index c19ce18..e93b501 100644
+--- a/app/Http/Middleware/HandleInertiaRequests.php
++++ b/app/Http/Middleware/HandleInertiaRequests.php
+@@ -37,7 +37,9 @@ public function share(Request $request): array
+     {
+         return [
+             ...parent::share($request),
+-            //
++            'auth' => [
++                'user' => $request->user()?->only(['id', 'name', 'email', 'role', 'professional_id']),
++            ],
+         ];
+     }
+ }
+diff --git a/app/Models/User.php b/app/Models/User.php
+index f6ba1d2..d0a735a 100644
+--- a/app/Models/User.php
++++ b/app/Models/User.php
+@@ -10,7 +10,7 @@
+ use Illuminate\Foundation\Auth\User as Authenticatable;
+ use Illuminate\Notifications\Notifiable;
+ 
+-#[Fillable(['name', 'email', 'password'])]
++#[Fillable(['name', 'email', 'password', 'role', 'professional_id'])]
+ #[Hidden(['password', 'remember_token'])]
+ class User extends Authenticatable
+ {
+diff --git a/bootstrap/app.php b/bootstrap/app.php
+index ea49b15..9b319f6 100644
+--- a/bootstrap/app.php
++++ b/bootstrap/app.php
+@@ -15,6 +15,13 @@
+         $middleware->web(append: [
+             \App\Http\Middleware\HandleInertiaRequests::class,
+         ]);
++
++        $middleware->alias([
++            'module' => \App\Http\Middleware\EnsureModuleAccess::class,
++        ]);
++
++        $middleware->redirectGuestsTo(fn () => route('admin.login'));
++        $middleware->redirectUsersTo(fn () => route('admin.dashboard'));
+     })
+     ->withExceptions(function (Exceptions $exceptions): void {
+         $exceptions->shouldRenderJsonWhen(
+diff --git a/composer.json b/composer.json
+index 94ba2d7..7e49872 100644
+--- a/composer.json
++++ b/composer.json
+@@ -6,7 +6,7 @@
+     "keywords": ["laravel", "framework"],
+     "license": "MIT",
+     "require": {
+-        "php": "^8.3",
++        "php": "^8.4",
+         "inertiajs/inertia-laravel": "^3.5",
+         "laravel/framework": "^13.17",
+         "laravel/tinker": "^3.0"
+diff --git a/config/database.php b/config/database.php
+index abbb88e..d79e1db 100644
+--- a/config/database.php
++++ b/config/database.php
+@@ -17,7 +17,7 @@
+     |
+     */
+ 
+-    'default' => env('DB_CONNECTION', 'sqlite'),
++    'default' => env('DB_CONNECTION', 'mysql'),
+ 
+     /*
+     |--------------------------------------------------------------------------
+diff --git a/database/migrations/2026_10_23_024946_create_orders_table.php b/database/migrations/2026_10_23_024946_create_orders_table.php
+index cc90106..b6d4c8f 100644
+--- a/database/migrations/2026_10_23_024946_create_orders_table.php
++++ b/database/migrations/2026_10_23_024946_create_orders_table.php
+@@ -18,8 +18,8 @@ public function up(): void
+             $table->integer('total');
+             $table->string('delivery_method')->default('pickup'); // delivery, pickup
+             $table->json('shipping_address')->nullable();
+-            $table->string('order_status')->default('en_attente_paiement'); // en_attente_paiement, payee, en_preparation, expediee, terminee, annulee, remboursee
+-            $table->string('payment_status')->default('pending'); // pending, success, failed, refunded
++            $table->string('order_status')->default('pending'); // pending, processing, shipped, delivered, cancelled
++            $table->string('payment_status')->default('pending'); // pending, paid, refunded
+             $table->string('payment_method')->nullable(); // card, mobile_money, cash
+             $table->timestamps();
+         });
+diff --git a/database/migrations/2026_10_23_030000_add_role_to_users_table.php b/database/migrations/2026_10_23_030000_add_role_to_users_table.php
+new file mode 100644
+index 0000000..fcc72d4
+--- /dev/null
++++ b/database/migrations/2026_10_23_030000_add_role_to_users_table.php
+@@ -0,0 +1,24 @@
++<?php
++
++use Illuminate\Database\Migrations\Migration;
++use Illuminate\Database\Schema\Blueprint;
++use Illuminate\Support\Facades\Schema;
++
++return new class extends Migration
++{
++    public function up(): void
++    {
++        Schema::table('users', function (Blueprint $table) {
++            $table->string('role')->default('employee')->after('password'); // admin, manager, employee
++            $table->foreignId('professional_id')->nullable()->after('role')->constrained()->nullOnDelete();
++        });
++    }
++
++    public function down(): void
++    {
++        Schema::table('users', function (Blueprint $table) {
++            $table->dropConstrainedForeignId('professional_id');
++            $table->dropColumn('role');
++        });
++    }
++};
+diff --git a/database/seeders/DatabaseSeeder.php b/database/seeders/DatabaseSeeder.php
+index 6b901f8..26be0f4 100644
+--- a/database/seeders/DatabaseSeeder.php
++++ b/database/seeders/DatabaseSeeder.php
+@@ -2,7 +2,6 @@
+ 
+ namespace Database\Seeders;
+ 
+-use App\Models\User;
+ use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+ use Illuminate\Database\Seeder;
+ 
+@@ -15,11 +14,6 @@ class DatabaseSeeder extends Seeder
+      */
+     public function run(): void
+     {
+-        // User::factory(10)->create();
+-
+-        User::factory()->create([
+-            'name' => 'Test User',
+-            'email' => 'test@example.com',
+-        ]);
++        $this->call(DemoDataSeeder::class);
+     }
+ }
+diff --git a/database/seeders/DemoDataSeeder.php b/database/seeders/DemoDataSeeder.php
+index 28c2ec4..75a67d7 100644
+--- a/database/seeders/DemoDataSeeder.php
++++ b/database/seeders/DemoDataSeeder.php
+@@ -2,255 +2,224 @@
+ 
+ namespace Database\Seeders;
+ 
+-use Illuminate\Database\Seeder;
+-use App\Models\Service;
+-use App\Models\Professional;
+-use App\Models\Product;
+-use App\Models\Client;
+ use App\Models\Appointment;
++use App\Models\Client;
+ use App\Models\Order;
+ use App\Models\OrderItem;
+-use App\Models\Transaction;
+-use App\Models\StockMovement;
++use App\Models\Product;
++use App\Models\Professional;
+ use App\Models\SalonSetting;
++use App\Models\Service;
++use App\Models\StockMovement;
++use App\Models\Transaction;
+ use App\Models\User;
++use Illuminate\Database\Seeder;
++use Illuminate\Support\Carbon;
+ use Illuminate\Support\Facades\Hash;
+-
++use Illuminate\Support\Str;
++
++/**
++ * Données de démonstration du salon.
++ * Le contenu vient de database/seeders/data/demo.json (généré à partir des données
++ * d'exemple du front) ; les statuts utilisent le vocabulaire attendu par l'interface :
++ * commandes pending|processing|shipped|delivered|cancelled, paiements pending|paid|refunded,
++ * transactions pending|success|failed|refunded, rendez-vous pending|confirmed|completed|cancelled.
++ */
+ class DemoDataSeeder extends Seeder
+ {
++    private array $data;
++
+     public function run(): void
+     {
+-        // 1. Users for admin
+-        User::updateOrCreate(['email' => 'admin@glamor-beauty.com'], [
+-            'name' => 'Directrice du Salon',
+-            'password' => Hash::make('admin123'),
+-        ]);
++        $this->data = json_decode(file_get_contents(__DIR__.'/data/demo.json'), true, 512, JSON_THROW_ON_ERROR);
++
++        $this->services();
++        $this->professionals();
++        $this->products();
++        $this->clients();
++        $this->appointments();
++        $this->orders();
++        $this->transactions();
++        $this->stockMovements();
++        $this->settings();
++        $this->users();
++    }
+ 
+-        // 2. Services
+-        $servicesData = [
+-            // Coiffure
+-            ['id' => 1, 'name' => 'Coupe & Brushing Signature', 'category' => 'coiffure', 'description' => 'Diagnostic personnalisé, shampoing traitant, coupe sur-mesure et brushing soyeux.', 'price' => 15000, 'duration' => 60, 'image' => 'https://images.unsplash.com/photo-1560066984-138dadb4c035?w=600&auto=format&fit=crop'],
+-            ['id' => 2, 'name' => 'Brushing Glamour & Soin', 'category' => 'coiffure', 'description' => 'Mise en forme sublimée avec soin thermo-protecteur et brillance longue durée.', 'price' => 10000, 'duration' => 45, 'image' => 'https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&auto=format&fit=crop'],
+-            ['id' => 3, 'name' => 'Tresses Africaines & Nattes Stylisées', 'category' => 'coiffure', 'description' => 'Créations artistiques protectrices : box braids, knotless, nattes collées soignées.', 'price' => 25000, 'duration' => 120, 'image' => 'https://images.unsplash.com/photo-1605497788044-5a32c7078486?w=600&auto=format&fit=crop'],
+-            ['id' => 4, 'name' => 'Coloration Lumineuse & Balayage', 'category' => 'coiffure', 'description' => 'Éclaircissement délicat, reflets dorés ou caramel et patine gloss nourrissante.', 'price' => 35000, 'duration' => 120, 'image' => 'https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=600&auto=format&fit=crop'],
+-            ['id' => 5, 'name' => 'Coiffure Événementielle & Mariage', 'category' => 'coiffure', 'description' => 'Chignon haute couture, attaches sophistiquées et pose d’accessoires précieux.', 'price' => 40000, 'duration' => 90, 'image' => 'https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=600&auto=format&fit=crop'],
+-            ['id' => 6, 'name' => 'Soin Profond Kératine & Hydratation', 'category' => 'coiffure', 'description' => 'Bain d’huiles précieuses, vapeur régénérante et scellage d’hydratation intensif.', 'price' => 20000, 'duration' => 60, 'image' => 'https://images.unsplash.com/photo-1519699047748-de8e457a634e?w=600&auto=format&fit=crop'],
+-            // Manucure
+-            ['id' => 7, 'name' => 'Pose de Vernis Classique Élégance', 'category' => 'manucure', 'description' => 'Limage précis, repousse des cuticules et application d’une laque haute brillance.', 'price' => 8000, 'duration' => 30, 'image' => 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop'],
+-            ['id' => 8, 'name' => 'Pose de Gel & Rallongement Chablons', 'category' => 'manucure', 'description' => 'Façonnement d’ongles parfaits, robustes et naturels avec finition brillante.', 'price' => 22000, 'duration' => 75, 'image' => 'https://images.unsplash.com/photo-1604654894610-df63bc536371?w=600&auto=format&fit=crop'],
+-            ['id' => 9, 'name' => 'Vernis Semi-Permanent Tenue 3 Semaines', 'category' => 'manucure', 'description' => 'Manucure russe combinée et pose sous lampe UV pour une tenue impeccable.', 'price' => 15000, 'duration' => 45, 'image' => 'https://images.unsplash.com/photo-1519014816548-bf5fe059798b?w=600&auto=format&fit=crop'],
+-            ['id' => 10, 'name' => 'Nail Art Haute Couture & Effets Précieux', 'category' => 'manucure', 'description' => 'Feuilles d’or, dégradés babyboomer, incrustations paillettes et motifs peints à la main.', 'price' => 12000, 'duration' => 45, 'image' => 'https://images.unsplash.com/photo-1599940824399-b87987ceb72a?w=600&auto=format&fit=crop'],
+-            ['id' => 11, 'name' => 'Soin des Mains Royal au Karité', 'category' => 'manucure', 'description' => 'Gommage velours, masque tiède au pur beurre de karité et modelage délassant.', 'price' => 14000, 'duration' => 40, 'image' => 'https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=600&auto=format&fit=crop'],
+-            // Pédicure
+-            ['id' => 12, 'name' => 'Beauté des Pieds Prestige', 'category' => 'pedicure', 'description' => 'Bain moussant adoucissant, soin des callosités, limage et hydratation intense.', 'price' => 16000, 'duration' => 45, 'image' => 'https://images.unsplash.com/photo-1519415510236-718bdfcd89c8?w=600&auto=format&fit=crop'],
+-            ['id' => 13, 'name' => 'Soins des Pieds Calluspeeling Rénovateur', 'category' => 'pedicure', 'description' => 'Traitement novateur éliminant crevasses et callosités sans lame pour une peau de bébé.', 'price' => 22000, 'duration' => 50, 'image' => 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=600&auto=format&fit=crop'],
+-            ['id' => 14, 'name' => 'Pose de Vernis Pieds & Éclat', 'category' => 'pedicure', 'description' => 'Mise en beauté rapide avec vernis éclatant adapté aux sandales ouvertes.', 'price' => 8000, 'duration' => 30, 'image' => 'https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=600&auto=format&fit=crop'],
+-            ['id' => 15, 'name' => 'Pédicure Esthétique & Gommage Minéral', 'category' => 'pedicure', 'description' => 'Exfoliation aux sels marins, masque enveloppant et soin des ongles complet.', 'price' => 18000, 'duration' => 50, 'image' => 'https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&auto=format&fit=crop'],
+-            ['id' => 16, 'name' => 'Pédicure Complète Spa & Réflexologie Douce', 'category' => 'pedicure', 'description' => 'Rituel sensoriel suprême avec bain floral, gommage, masque karité et massage plantaire.', 'price' => 26000, 'duration' => 60, 'image' => 'https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=600&auto=format&fit=crop'],
+-        ];
++    private function date(?string $value): ?Carbon
++    {
++        return $value ? Carbon::parse($value) : null;
++    }
+ 
+-        foreach ($servicesData as $svc) {
+-            Service::updateOrCreate(['id' => $svc['id']], $svc);
++    private function services(): void
++    {
++        foreach ($this->data['services'] as $s) {
++            $service = Service::updateOrCreate(['id' => $s['id']], [
++                'name' => $s['name'],
++                'category' => $s['category'],
++                'description' => $s['description'] ?? null,
++                'price' => $s['price'],
++                'duration' => $s['duration'],
++                'image' => $s['image'] ?? null,
++                'status' => $s['status'] ?? 'active',
++            ]);
++            $service->professionals()->sync($s['professionals'] ?? []);
+         }
++    }
+ 
+-        // 3. Professionals
+-        $professionalsData = [
+-            [
+-                'id' => 1,
+-                'name' => 'Aminata Diallo',
+-                'role' => 'Coiffeuse Senior & Visagiste',
+-                'specialties' => ['Tresses d’art', 'Colorimétrie', 'Coupes structurées'],
+-                'phone' => '+225 07 45 89 12 34',
+-                'email' => 'aminata.diallo@glamor-beauty.com',
+-                'photo' => 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=400&h=400&auto=format&fit=crop&crop=faces',
+-                'working_hours' => [
+-                    'monday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'tuesday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'wednesday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'thursday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'friday' => ['start' => '09:00', 'end' => '19:00'],
+-                    'saturday' => ['start' => '09:00', 'end' => '19:00'],
+-                ],
+-                'breaks' => [['start' => '13:00', 'end' => '14:00']],
+-                'days_off' => ['sunday'],
+-                'blocked_slots' => [],
+-                'status' => 'active',
+-                'service_ids' => [1, 2, 3, 4, 5, 6],
+-            ],
+-            [
+-                'id' => 2,
+-                'name' => 'Fatou Ndiaye',
+-                'role' => 'Styliste Ongulaire & Nail Artist',
+-                'specialties' => ['Nail Art haute précision', 'Extension chablon', 'Gel porcelaine'],
+-                'phone' => '+225 05 67 12 34 56',
+-                'email' => 'fatou.ndiaye@glamor-beauty.com',
+-                'photo' => 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=400&h=400&auto=format&fit=crop&crop=faces',
+-                'working_hours' => [
+-                    'monday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'tuesday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'wednesday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'thursday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'friday' => ['start' => '09:00', 'end' => '19:00'],
+-                    'saturday' => ['start' => '09:00', 'end' => '19:00'],
+-                ],
+-                'breaks' => [['start' => '12:30', 'end' => '13:30']],
+-                'days_off' => ['sunday', 'monday'],
+-                'blocked_slots' => [],
+-                'status' => 'active',
+-                'service_ids' => [7, 8, 9, 10, 11, 14],
+-            ],
+-            [
+-                'id' => 3,
+-                'name' => 'Mariam Koné',
+-                'role' => 'Experte Soins Capillaires & Tresses',
+-                'specialties' => ['Soins cuir chevelu', 'Tresses protectrices', 'Brushing'],
+-                'phone' => '+225 01 23 98 76 54',
+-                'email' => 'mariam.kone@glamor-beauty.com',
+-                'photo' => 'https://images.unsplash.com/photo-1589156280159-27698a70f29e?w=400&h=400&auto=format&fit=crop&crop=faces',
+-                'working_hours' => [
+-                    'tuesday' => ['start' => '09:30', 'end' => '18:30'],
+-                    'wednesday' => ['start' => '09:30', 'end' => '18:30'],
+-                    'thursday' => ['start' => '09:30', 'end' => '18:30'],
+-                    'friday' => ['start' => '09:30', 'end' => '19:00'],
+-                    'saturday' => ['start' => '09:00', 'end' => '19:00'],
+-                ],
+-                'breaks' => [['start' => '13:00', 'end' => '14:00']],
+-                'days_off' => ['sunday', 'monday'],
+-                'blocked_slots' => [],
+-                'status' => 'active',
+-                'service_ids' => [1, 2, 3, 6],
+-            ],
+-            [
+-                'id' => 4,
+-                'name' => 'Aïssatou Ba',
+-                'role' => 'Esthéticienne & Praticienne Mains-Pieds',
+-                'specialties' => ['Pédicure Spa', 'Calluspeeling', 'Modelage relaxant'],
+-                'phone' => '+225 07 11 22 33 44',
+-                'email' => 'aissatou.ba@glamor-beauty.com',
+-                'photo' => 'https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=400&h=400&auto=format&fit=crop&crop=faces',
+-                'working_hours' => [
+-                    'monday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'wednesday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'thursday' => ['start' => '09:00', 'end' => '18:00'],
+-                    'friday' => ['start' => '09:00', 'end' => '19:00'],
+-                    'saturday' => ['start' => '09:00', 'end' => '19:00'],
+-                ],
+-                'breaks' => [['start' => '12:00', 'end' => '13:00']],
+-                'days_off' => ['sunday', 'tuesday'],
+-                'blocked_slots' => [],
+-                'status' => 'active',
+-                'service_ids' => [7, 9, 11, 12, 13, 15, 16],
+-            ],
+-        ];
+-
+-        foreach ($professionalsData as $prof) {
+-            $serviceIds = $prof['service_ids'];
+-            unset($prof['service_ids']);
+-            $professional = Professional::updateOrCreate(['id' => $prof['id']], $prof);
+-            $professional->services()->sync($serviceIds);
++    private function professionals(): void
++    {
++        foreach ($this->data['professionals'] as $p) {
++            $professional = Professional::updateOrCreate(['id' => $p['id']], [
++                'name' => $p['name'],
++                'role' => $p['role'],
++                'specialties' => $p['specialties'] ?? [],
++                'phone' => $p['phone'] ?? null,
++                'email' => $p['email'] ?? null,
++                'photo' => $p['photo'] ?? null,
++                'working_hours' => $p['workingHours'] ?? [],
++                'breaks' => $p['breaks'] ?? [],
++                'days_off' => $p['daysOff'] ?? [],
++                'blocked_slots' => $p['blockedSlots'] ?? [],
++                'status' => $p['status'] ?? 'active',
++            ]);
++            $professional->services()->sync($p['services'] ?? []);
+         }
++    }
+ 
+-        // 4. Products
+-        $productsData = [
+-            ['id' => 1, 'name' => 'Élixir Capillaire Régénérant Argan & Baobab', 'description' => 'Sérum d’exception nourrissant en profondeur la fibre capillaire sans alourdir.', 'category' => 'capillaire', 'price' => 18000, 'image' => 'https://images.unsplash.com/photo-1608248597359-f24300305ecb?w=600&auto=format&fit=crop', 'stock' => 18, 'alert_threshold' => 5, 'featured' => true, 'status' => 'active'],
+-            ['id' => 2, 'name' => 'Masque Sublime au Beurre de Mangue & Karité', 'description' => 'Soin réparateur intense pour cheveux secs, frisés ou défrisés.', 'category' => 'capillaire', 'price' => 22000, 'image' => 'https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?w=600&auto=format&fit=crop', 'stock' => 12, 'alert_threshold' => 4, 'featured' => true, 'status' => 'active'],
+-            ['id' => 3, 'name' => 'Shampoing Botanique Sans Sulfates 250ml', 'description' => 'Nettoyant doux infusé à l’aloe vera et à la provitamine B5.', 'category' => 'capillaire', 'price' => 12000, 'image' => 'https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=600&auto=format&fit=crop', 'stock' => 3, 'alert_threshold' => 5, 'featured' => false, 'status' => 'active'],
+-            ['id' => 4, 'name' => 'Crème Définition Boucles & Tresses Hibiscus', 'description' => 'Hydrate, apporte brillance et élimine les frisottis des coiffures afro.', 'category' => 'capillaire', 'price' => 15000, 'image' => 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=600&auto=format&fit=crop', 'stock' => 9, 'alert_threshold' => 3, 'featured' => false, 'status' => 'active'],
+-            ['id' => 5, 'name' => 'Huile Nourrissante Ongles & Cuticules à l’Amande', 'description' => 'Formule fortifiante au pinceau applicateur précision.', 'category' => 'manucure', 'price' => 7500, 'image' => 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?w=600&auto=format&fit=crop', 'stock' => 25, 'alert_threshold' => 5, 'featured' => true, 'status' => 'active'],
+-            ['id' => 6, 'name' => 'Vernis à Ongles Haute Couture "Rose Impérial"', 'description' => 'Teinte poudrée iconique, séchage rapide et éclat miroir.', 'category' => 'manucure', 'price' => 9500, 'image' => 'https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=600&auto=format&fit=crop', 'stock' => 14, 'alert_threshold' => 4, 'featured' => false, 'status' => 'active'],
+-            ['id' => 7, 'name' => 'Baume Réparateur Intense Pieds au Beurre d’Avocat', 'description' => 'Soulage les talons fendillés et hydrate les zones rugueuses.', 'category' => 'soins-pieds', 'price' => 13500, 'image' => 'https://images.unsplash.com/photo-1556228722-d0b7194680bc?w=600&auto=format&fit=crop', 'stock' => 2, 'alert_threshold' => 4, 'featured' => false, 'status' => 'active'],
+-            ['id' => 8, 'name' => 'Gommage Exfoliant Sels Marins & Eucalyptus', 'description' => 'Draine et adoucit instantanément la peau des pieds fatigués.', 'category' => 'soins-pieds', 'price' => 11000, 'image' => 'https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=600&auto=format&fit=crop', 'stock' => 0, 'alert_threshold' => 3, 'featured' => false, 'status' => 'active'],
+-            ['id' => 9, 'name' => 'Brosse en Poils de Sanglier & Bois d’Olivier', 'description' => 'Lisse la fibre capillaire et stimule délicatement la microcirculation.', 'category' => 'accessoires', 'price' => 16000, 'image' => 'https://images.unsplash.com/photo-1590159763121-7c9ff3149e0a?w=600&auto=format&fit=crop', 'stock' => 7, 'alert_threshold' => 2, 'featured' => true, 'status' => 'active'],
+-        ];
+-
+-        foreach ($productsData as $prod) {
+-            Product::updateOrCreate(['id' => $prod['id']], $prod);
++    private function products(): void
++    {
++        foreach ($this->data['products'] as $p) {
++            Product::updateOrCreate(['id' => $p['id']], [
++                'name' => $p['name'],
++                'description' => $p['description'] ?? null,
++                'category' => $p['category'],
++                'price' => $p['price'],
++                'image' => $p['image'] ?? null,
++                'stock' => $p['stock'] ?? 0,
++                'alert_threshold' => $p['alertThreshold'] ?? 5,
++                'featured' => $p['featured'] ?? false,
++                'status' => $p['status'] ?? 'active',
++            ]);
+         }
++    }
+ 
+-        // 5. Clients
+-        $clientsData = [
+-            ['id' => 1, 'name' => 'Marie-Josée Kouassi', 'phone' => '+225 07 01 23 45 67', 'email' => 'mj.kouassi@gmail.com', 'preferences' => 'Adore les colorations lumineuses et le thé vert à la menthe.', 'last_visit' => now()->subDays(5)],
+-            ['id' => 2, 'name' => 'Sarah Traoré', 'phone' => '+225 05 12 34 56 78', 'email' => 'sarah.traore@yahoo.fr', 'preferences' => 'Préfère les poses en gel naturelles et amande.', 'last_visit' => now()->subDays(2)],
+-            ['id' => 3, 'name' => 'Chantal Bamba', 'phone' => '+225 01 98 76 54 32', 'email' => 'chantal.bamba@orange.ci', 'preferences' => 'Sensible au cuir chevelu, masser avec douceur.', 'last_visit' => now()->subDays(12)],
+-            ['id' => 4, 'name' => 'Dominique Ouattara', 'phone' => '+225 07 88 99 00 11', 'email' => 'dominique.o@outlook.com', 'preferences' => 'Cliente VIP, créneaux en matinée recommandés.', 'last_visit' => now()->subDays(20)],
+-        ];
+-
+-        foreach ($clientsData as $cli) {
+-            Client::updateOrCreate(['id' => $cli['id']], $cli);
++    private function clients(): void
++    {
++        foreach ($this->data['clients'] as $c) {
++            Client::updateOrCreate(['id' => $c['id']], [
++                'name' => $c['name'],
++                'phone' => $c['phone'],
++                'email' => $c['email'] ?? null,
++                'preferences' => $c['preferences'] ?? null,
++                'last_visit' => $this->date($c['lastVisit'] ?? null),
++                'created_at' => $this->date($c['createdAt'] ?? null) ?? now(),
++            ]);
+         }
++    }
+ 
+-        // 6. Appointments
+-        $appointmentsData = [
+-            ['id' => 1, 'reference' => 'RDV-2026-001', 'client_id' => 1, 'service_id' => 1, 'professional_id' => 1, 'date' => now()->format('Y-m-d'), 'start_time' => '10:00', 'end_time' => '11:00', 'price' => 15000, 'status' => 'confirmed', 'notes' => 'Coupe d’entretien régulier.'],
+-            ['id' => 2, 'reference' => 'RDV-2026-002', 'client_id' => 2, 'service_id' => 8, 'professional_id' => 2, 'date' => now()->format('Y-m-d'), 'start_time' => '14:30', 'end_time' => '15:45', 'price' => 22000, 'status' => 'confirmed', 'notes' => 'Rallongement chablon forme amande.'],
+-            ['id' => 3, 'reference' => 'RDV-2026-003', 'client_id' => 3, 'service_id' => 6, 'professional_id' => 3, 'date' => now()->addDay()->format('Y-m-d'), 'start_time' => '11:00', 'end_time' => '12:00', 'price' => 20000, 'status' => 'pending', 'notes' => 'Soin kératine profond.'],
+-            ['id' => 4, 'reference' => 'RDV-2026-004', 'client_id' => 4, 'service_id' => 16, 'professional_id' => 4, 'date' => now()->addDays(2)->format('Y-m-d'), 'start_time' => '15:00', 'end_time' => '16:00', 'price' => 26000, 'status' => 'confirmed', 'notes' => 'Pédicure Spa complète VIP.'],
+-        ];
++    private function appointments(): void
++    {
++        foreach ($this->data['appointments'] as $a) {
++            Appointment::updateOrCreate(['id' => $a['id']], [
++                'reference' => $a['reference'],
++                'client_id' => $a['clientId'],
++                'service_id' => $a['serviceId'],
++                'professional_id' => $a['professionalId'] ?? null,
++                'date' => $a['date'],
++                'start_time' => $a['startTime'],
++                'end_time' => $a['endTime'],
++                'price' => $a['price'],
++                'status' => $a['status'],
++                'notes' => $a['notes'] ?? null,
++                'created_at' => $this->date($a['createdAt'] ?? null) ?? now(),
++            ]);
++        }
++    }
+ 
+-        foreach ($appointmentsData as $apt) {
+-            Appointment::updateOrCreate(['id' => $apt['id']], $apt);
++    private function orders(): void
++    {
++        foreach ($this->data['orders'] as $o) {
++            $order = Order::updateOrCreate(['id' => $o['id']], [
++                'reference' => $o['reference'],
++                'client_id' => $o['clientId'] ?? null,
++                'subtotal' => $o['subtotal'],
++                'discount' => $o['discount'] ?? 0,
++                'shipping_fee' => $o['shippingFee'] ?? 0,
++                'total' => $o['total'],
++                'delivery_method' => $o['deliveryMethod'] ?? 'pickup',
++                'shipping_address' => $o['shippingAddress'] ?? null,
++                'order_status' => $o['orderStatus'],
++                'payment_status' => $o['paymentStatus'],
++                'payment_method' => $o['paymentMethod'] ?? null,
++                'created_at' => $this->date($o['createdAt'] ?? null) ?? now(),
++            ]);
++
++            $order->items()->delete();
++            foreach ($o['items'] ?? [] as $item) {
++                OrderItem::create([
++                    'order_id' => $order->id,
++                    'product_id' => $item['productId'] ?? null,
++                    'name' => $item['name'],
++                    'price' => $item['price'],
++                    'quantity' => $item['quantity'],
++                ]);
++            }
+         }
++    }
+ 
+-        // 7. Orders & Transactions
+-        $order = Order::updateOrCreate(['id' => 1], [
+-            'reference' => 'CMD-2026-001',
+-            'client_id' => 1,
+-            'subtotal' => 40000,
+-            'discount' => 4000,
+-            'shipping_fee' => 0,
+-            'total' => 36000,
+-            'delivery_method' => 'pickup',
+-            'shipping_address' => ['city' => 'Abidjan', 'district' => 'Cocody'],
+-            'order_status' => 'payee',
+-            'payment_status' => 'success',
+-            'payment_method' => 'mobile_money',
+-        ]);
++    private function transactions(): void
++    {
++        foreach ($this->data['transactions'] as $t) {
++            Transaction::updateOrCreate(['id' => $t['id']], [
++                'reference' => $t['reference'],
++                'order_id' => $t['orderId'],
++                'amount' => $t['amount'],
++                'payment_method' => $t['paymentMethod'],
++                'status' => $t['status'],
++                'failure_reason' => $t['failureReason'] ?? null,
++                'created_at' => $this->date($t['date'] ?? null) ?? now(),
++            ]);
++        }
++    }
+ 
+-        OrderItem::updateOrCreate(['id' => 1], [
+-            'order_id' => $order->id,
+-            'product_id' => 1,
+-            'name' => 'Élixir Capillaire Régénérant Argan & Baobab',
+-            'price' => 18000,
+-            'quantity' => 1,
+-        ]);
++    private function stockMovements(): void
++    {
++        foreach ($this->data['stockMovements'] as $m) {
++            StockMovement::updateOrCreate(['id' => $m['id']], [
++                'product_id' => $m['productId'],
++                'type' => $m['type'],
++                'quantity' => $m['quantity'],
++                'note' => $m['note'] ?? null,
++                'created_at' => $this->date($m['date'] ?? null) ?? now(),
++            ]);
++        }
++    }
+ 
+-        OrderItem::updateOrCreate(['id' => 2], [
+-            'order_id' => $order->id,
+-            'product_id' => 2,
+-            'name' => 'Masque Sublime au Beurre de Mangue & Karité',
+-            'price' => 22000,
+-            'quantity' => 1,
+-        ]);
++    /** Un enregistrement par clé de premier niveau des réglages (name, phone, openingHours...). */
++    private function settings(): void
++    {
++        foreach ($this->data['salonSettings'] as $key => $value) {
++            SalonSetting::updateOrCreate(['key' => $key], ['value' => $value]);
++        }
++    }
+ 
+-        Transaction::updateOrCreate(['id' => 1], [
+-            'reference' => 'TXN-2026-001',
+-            'order_id' => $order->id,
+-            'amount' => 36000,
+-            'payment_method' => 'mobile_money',
+-            'status' => 'success',
+-        ]);
++    /** Comptes de l'espace admin. Mot de passe : SEED_PASSWORD, sinon généré et affiché. */
++    private function users(): void
++    {
++        $password = env('SEED_PASSWORD') ?: Str::random(14);
+ 
+-        // 8. Salon Settings
+-        $settingsData = [
+-            'general' => [
+-                'name' => "Glam'Or Beauty",
+-                'phone' => '+225 01 23 45 67 89',
+-                'email' => 'contact@glamor-beauty.com',
+-                'address' => "12 Boulevard de la Beauté, Cocody Ambassades, Abidjan, Côte d'Ivoire",
+-            ],
+-            'shipping' => [
+-                'shipping_fee' => 2500,
+-                'free_shipping_threshold' => 50000,
+-                'free_pickup' => true,
+-            ],
+-            'promo_codes' => [
+-                ['code' => 'BIENVENUE10', 'discount' => 10, 'type' => 'percentage'],
+-                ['code' => 'BEAUTY5000', 'discount' => 5000, 'type' => 'fixed'],
+-            ],
++        $users = [
++            ['email' => 'directrice@glamor-beauty.com', 'name' => 'Directrice du Salon', 'role' => 'admin', 'professional_id' => null],
++            ['email' => 'manager@glamor-beauty.com', 'name' => 'Responsable Opérationnelle', 'role' => 'manager', 'professional_id' => null],
++            ['email' => 'aminata.diallo@glamor-beauty.com', 'name' => 'Aminata Diallo', 'role' => 'employee', 'professional_id' => 1],
+         ];
+ 
+-        foreach ($settingsData as $key => $val) {
+-            SalonSetting::updateOrCreate(['key' => $key], ['value' => $val]);
++        foreach ($users as $user) {
++            User::updateOrCreate(['email' => $user['email']], $user + ['password' => Hash::make($password)]);
++        }
++
++        if (! env('SEED_PASSWORD')) {
++            $this->command?->warn("Mot de passe généré pour les comptes admin : {$password}");
+         }
+     }
+ }
+diff --git a/database/seeders/data/demo.json b/database/seeders/data/demo.json
+new file mode 100644
+index 0000000..a81fc08
+--- /dev/null
++++ b/database/seeders/data/demo.json
+@@ -0,0 +1,1274 @@
++{
++  "services": [
++    {
++      "id": 1,
++      "name": "Coupe Femme & Brushing Signature",
++      "category": "coiffure",
++      "description": "Diagnostic personnalisé, shampoing traitant, coupe sur mesure et brushing soigné avec produits thermo-protecteurs.",
++      "price": 15000,
++      "duration": 45,
++      "image": "https://images.unsplash.com/photo-1560066984-138dadb4c035?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1,
++        3
++      ],
++      "status": "active"
++    },
++    {
++      "id": 2,
++      "name": "Brushing Glamour & Soin Express",
++      "category": "coiffure",
++      "description": "Lavage délicat, masque nourrissant flash et séchage haute brillance pour un mouvement naturel impeccable.",
++      "price": 12000,
++      "duration": 30,
++      "image": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1,
++        3
++      ],
++      "status": "active"
++    },
++    {
++      "id": 3,
++      "name": "Tresses Africaines & Nattes Stylisées",
++      "category": "coiffure",
++      "description": "Confection artisanale de nattes collées, box braids ou vanilles élégantes avec hydratation en profondeur du cuir chevelu.",
++      "price": 30000,
++      "duration": 90,
++      "image": "https://images.unsplash.com/photo-1607990281513-2c110a25bd8c?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1,
++        3
++      ],
++      "status": "active"
++    },
++    {
++      "id": 4,
++      "name": "Coloration Experte & Patine Éclat",
++      "category": "coiffure",
++      "description": "Application de nuance premium sans ammoniaque, fondu naturel, patine réparatrice et soin fixateur de reflets.",
++      "price": 35000,
++      "duration": 120,
++      "image": "https://images.unsplash.com/photo-1595476108010-b4d1f102b1b1?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1
++      ],
++      "status": "active"
++    },
++    {
++      "id": 5,
++      "name": "Coiffure Événementielle & Mariage",
++      "category": "coiffure",
++      "description": "Chignon haute couture, attaches sophistiquées, pose d’ornements et fixation longue tenue pour vos grands jours.",
++      "price": 50000,
++      "duration": 120,
++      "image": "https://images.unsplash.com/photo-1492106087820-71f1a00d2b11?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1
++      ],
++      "status": "active"
++    },
++    {
++      "id": 6,
++      "name": "Soin Capillaire Profond au Karité & Kératine",
++      "category": "coiffure",
++      "description": "Rituel revitalisant sous vapeur tiède, massage crânien relaxant et régénération de la fibre capillaire fragilisée.",
++      "price": 22000,
++      "duration": 60,
++      "image": "https://images.unsplash.com/photo-1527799820374-dcf8d9d4a388?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        1,
++        3
++      ],
++      "status": "active"
++    },
++    {
++      "id": 7,
++      "name": "Pose de Vernis Classique & Limage",
++      "category": "manucure",
++      "description": "Mise en forme des ongles, repousse des cuticules, application d’une base protectrice et double couche de vernis de luxe.",
++      "price": 10000,
++      "duration": 30,
++      "image": "https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 8,
++      "name": "Pose Complète Gel UV & Extensions",
++      "category": "manucure",
++      "description": "Rallongement aux chablons ou capsules, modelage au gel résistant, finition ultra-brillante ou mate au choix.",
++      "price": 22000,
++      "duration": 60,
++      "image": "https://images.unsplash.com/photo-1604654894610-df63bc536371?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 9,
++      "name": "Vernis Semi-Permanent Haute Tenue",
++      "category": "manucure",
++      "description": "Préparation méticuleuse de la plaque de l’ongle, catalysation sous lampe LED, tenue certifiée 3 semaines sans écaillement.",
++      "price": 18000,
++      "duration": 45,
++      "image": "https://images.unsplash.com/photo-1519014816548-bf5fe059798b?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 10,
++      "name": "Nail Art Créatif & Décoration Sur-Mesure",
++      "category": "manucure",
++      "description": "Motifs peints à la main, dégradés baby-boomer, incrustations de feuilles d’or ou strass précieux pour un look unique.",
++      "price": 25000,
++      "duration": 60,
++      "image": "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2
++      ],
++      "status": "active"
++    },
++    {
++      "id": 11,
++      "name": "Soin Prestige des Mains & Masque Velours",
++      "category": "manucure",
++      "description": "Gommage aux sels minéraux, bain d’huile d’argan tiède, masque adoucissant et modelage bienfaisant des mains et poignets.",
++      "price": 16000,
++      "duration": 45,
++      "image": "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 12,
++      "name": "Beauté des Pieds Essentielle",
++      "category": "pedicure",
++      "description": "Bain bouillonnant délassant, élimination des callosités légères, soin des cuticules et hydratation au beurre de mangue.",
++      "price": 18000,
++      "duration": 45,
++      "image": "https://images.unsplash.com/photo-1519415510236-718bdfcd89c8?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 13,
++      "name": "Soin des Pieds Intense Anti-Callosités",
++      "category": "pedicure",
++      "description": "Traitement kératolytique ciblé, ponçage doux des talons, gommage exfoliant et enveloppement nourrissant.",
++      "price": 15000,
++      "duration": 40,
++      "image": "https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 14,
++      "name": "Pose de Vernis Pieds Laqué",
++      "category": "pedicure",
++      "description": "Nettoyage des ongles, base fortifiante, double laquage aux teintes éclatantes et top coat séchage rapide.",
++      "price": 10000,
++      "duration": 25,
++      "image": "https://images.unsplash.com/photo-1507652313519-d4e9174996dd?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2
++      ],
++      "status": "active"
++    },
++    {
++      "id": 15,
++      "name": "Pédicure Esthétique & Vernis Semi-Permanent",
++      "category": "pedicure",
++      "description": "Soin complet des ongles de pieds, traitement des contours et application d’un gel semi-permanent éclat longue tenue.",
++      "price": 22000,
++      "duration": 50,
++      "image": "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2,
++        4
++      ],
++      "status": "active"
++    },
++    {
++      "id": 16,
++      "name": "Pédicure Spa Complète & Bain Paraffine",
++      "category": "pedicure",
++      "description": "Rituel d’exception : bain aromatique, gommage sensoriel, bain chaud à la paraffine régénérante et réflexologie relaxante.",
++      "price": 28000,
++      "duration": 60,
++      "image": "https://images.unsplash.com/photo-1515377905703-c4788e51af15?w=800&auto=format&fit=crop&q=80",
++      "professionals": [
++        2
++      ],
++      "status": "active"
++    }
++  ],
++  "professionals": [
++    {
++      "id": 1,
++      "name": "Aminata Diallo",
++      "role": "Coiffeuse Senior & Visagiste",
++      "specialties": [
++        "Coupe & Brushing",
++        "Colorations complexes",
++        "Coiffure de mariée",
++        "Soins réparateurs"
++      ],
++      "phone": "+225 07 48 12 34 56",
++      "email": "aminata.diallo@glamor-beauty.com",
++      "photo": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=500&auto=format&fit=crop&q=80",
++      "services": [
++        1,
++        2,
++        3,
++        4,
++        5,
++        6
++      ],
++      "workingHours": {
++        "monday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "tuesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "wednesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "thursday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "friday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "saturday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "sunday": null
++      },
++      "breaks": [
++        {
++          "start": "12:30",
++          "end": "13:30"
++        }
++      ],
++      "daysOff": [
++        "sunday"
++      ],
++      "blockedSlots": [
++        {
++          "date": "2026-10-15",
++          "start": "14:00",
++          "end": "16:00",
++          "reason": "Formation technique coloration"
++        },
++        {
++          "date": "2026-10-22",
++          "start": "10:00",
++          "end": "12:00",
++          "reason": "Rendez-vous fournisseur"
++        }
++      ],
++      "status": "active"
++    },
++    {
++      "id": 2,
++      "name": "Fatou Ndiaye",
++      "role": "Styliste Ongulaire & Nail Artist",
++      "specialties": [
++        "Pose Gel UV",
++        "Nail Art d'exception",
++        "Vernis semi-permanent",
++        "Pédicure Spa"
++      ],
++      "phone": "+225 05 89 23 45 67",
++      "email": "fatou.ndiaye@glamor-beauty.com",
++      "photo": "https://images.unsplash.com/photo-1580489944761-15a19d654956?w=500&auto=format&fit=crop&q=80",
++      "services": [
++        7,
++        8,
++        9,
++        10,
++        11,
++        12,
++        13,
++        14,
++        15,
++        16
++      ],
++      "workingHours": {
++        "monday": {
++          "start": "09:30",
++          "end": "18:30"
++        },
++        "tuesday": {
++          "start": "09:30",
++          "end": "18:30"
++        },
++        "wednesday": {
++          "start": "09:30",
++          "end": "18:30"
++        },
++        "thursday": {
++          "start": "09:30",
++          "end": "18:30"
++        },
++        "friday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "saturday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "sunday": null
++      },
++      "breaks": [
++        {
++          "start": "13:00",
++          "end": "14:00"
++        }
++      ],
++      "daysOff": [
++        "sunday"
++      ],
++      "blockedSlots": [
++        {
++          "date": "2026-10-18",
++          "start": "15:00",
++          "end": "17:00",
++          "reason": "Masterclass Nail Art international"
++        }
++      ],
++      "status": "active"
++    },
++    {
++      "id": 3,
++      "name": "Mariam Koné",
++      "role": "Coiffeuse Spécialiste Tresses & Soins",
++      "specialties": [
++        "Tresses africaines",
++        "Nattes collées",
++        "Soins botaniques",
++        "Brushing lissant"
++      ],
++      "phone": "+225 01 02 34 56 78",
++      "email": "mariam.kone@glamor-beauty.com",
++      "photo": "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=80",
++      "services": [
++        1,
++        2,
++        3,
++        6
++      ],
++      "workingHours": {
++        "monday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "tuesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "wednesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "thursday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "friday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "saturday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "sunday": null
++      },
++      "breaks": [
++        {
++          "start": "12:00",
++          "end": "13:00"
++        }
++      ],
++      "daysOff": [
++        "monday",
++        "sunday"
++      ],
++      "blockedSlots": [
++        {
++          "date": "2026-10-16",
++          "start": "11:00",
++          "end": "12:30",
++          "reason": "Atelier soins naturels"
++        }
++      ],
++      "status": "active"
++    },
++    {
++      "id": 4,
++      "name": "Aïssatou Ba",
++      "role": "Esthéticienne & Praticienne Mains-Pieds",
++      "specialties": [
++        "Soins bien-être",
++        "Manucure russe",
++        "Callus peeling",
++        "Gommages sensoriels"
++      ],
++      "phone": "+225 07 77 88 99 00",
++      "email": "aissatou.ba@glamor-beauty.com",
++      "photo": "https://images.unsplash.com/photo-1567532939604-b6b5b0db2604?w=500&auto=format&fit=crop&q=80",
++      "services": [
++        7,
++        8,
++        9,
++        11,
++        12,
++        13,
++        15
++      ],
++      "workingHours": {
++        "monday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "tuesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "wednesday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "thursday": {
++          "start": "09:00",
++          "end": "18:00"
++        },
++        "friday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "saturday": {
++          "start": "09:00",
++          "end": "19:00"
++        },
++        "sunday": null
++      },
++      "breaks": [
++        {
++          "start": "13:30",
++          "end": "14:30"
++        }
++      ],
++      "daysOff": [
++        "sunday"
++      ],
++      "blockedSlots": [
++        {
++          "date": "2026-10-20",
++          "start": "09:00",
++          "end": "11:00",
++          "reason": "Inventaire matériel institut"
++        }
++      ],
++      "status": "active"
++    }
++  ],
++  "products": [
++    {
++      "id": 1,
++      "name": "Élixir Capillaire Régénérant Argan & Ricin (100ml)",
++      "description": "Huile précieuse multifonction pour nourrir les pointes sèches, stimuler la pousse et apporter un éclat soyeux sans alourdir.",
++      "category": "capillaire",
++      "price": 14500,
++      "image": "https://images.unsplash.com/photo-1608248597359-597541604a37?w=800&auto=format&fit=crop&q=80",
++      "stock": 18,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 2,
++      "name": "Masque Réparateur Intense au Beurre de Karité (250ml)",
++      "description": "Traitement réparateur profond formulé pour cheveux secs ou défrisés. Restaure l’élasticité et discipline les frisottis.",
++      "category": "capillaire",
++      "price": 18000,
++      "image": "https://images.unsplash.com/photo-1526947425960-945c6e72858f?w=800&auto=format&fit=crop&q=80",
++      "stock": 4,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 3,
++      "name": "Shampoing Doux Sans Sulfate Éclat & Volume (300ml)",
++      "description": "Nettoie en douceur tout en préservant le film lipidique naturel et l’éclat des colorations. Parfum jasmin délicat.",
++      "category": "capillaire",
++      "price": 11000,
++      "image": "https://images.unsplash.com/photo-1535585209827-a15fcdbc4c2d?w=800&auto=format&fit=crop&q=80",
++      "stock": 22,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    },
++    {
++      "id": 4,
++      "name": "Huile Nourrissante Cuticules Rose & Amande (15ml)",
++      "description": "Cocktail vitaminé aux extraits de rose pour adoucir les cuticules, fortifier les ongles cassants et stimuler une repousse saine.",
++      "category": "manucure",
++      "price": 7500,
++      "image": "https://images.unsplash.com/photo-1607602132700-068258431c6c?w=800&auto=format&fit=crop&q=80",
++      "stock": 12,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 5,
++      "name": "Vernis Gel Laqué Rouge Royal 12ml",
++      "description": "Pigments purs et formule longue durée offrant une brillance miroir et une résistance supérieure aux chocs jusqu’à 14 jours.",
++      "category": "manucure",
++      "price": 9000,
++      "image": "https://images.unsplash.com/photo-1632345031435-8727f6897d53?w=800&auto=format&fit=crop&q=80",
++      "stock": 3,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    },
++    {
++      "id": 6,
++      "name": "Crème Mains Veloutée Hydratation Intense (75ml)",
++      "description": "Texture non grasse enrichie en glycérine végétale et fleur d’oranger pour protéger les mains contre les agressions quotidiennes.",
++      "category": "manucure",
++      "price": 8500,
++      "image": "https://images.unsplash.com/photo-1556228720-195a672e8a03?w=800&auto=format&fit=crop&q=80",
++      "stock": 0,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    },
++    {
++      "id": 7,
++      "name": "Baume Réparateur Talons Fendillés & Callosités (100ml)",
++      "description": "Formule concentrée à 15% d’urée et huile de baobab pour réparer en profondeur les talons les plus rugueux dès 3 applications.",
++      "category": "soins-pieds",
++      "price": 13000,
++      "image": "https://images.unsplash.com/photo-1598440947619-2c35fc9aa908?w=800&auto=format&fit=crop&q=80",
++      "stock": 15,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 8,
++      "name": "Gommage Exfoliant Pieds Menthe & Sel Marin (200g)",
++      "description": "Exfoliant vivifiant éliminant efficacement les peaux mortes tout en procurant une sensation immédiate de fraîcheur et légèreté.",
++      "category": "soins-pieds",
++      "price": 11500,
++      "image": "https://images.unsplash.com/photo-1571781926291-c477ebfd024b?w=800&auto=format&fit=crop&q=80",
++      "stock": 8,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    },
++    {
++      "id": 9,
++      "name": "Spray Fraîcheur & Décongestion Jambes Légères (150ml)",
++      "description": "Brume délassante enrichie en menthol et extrait de vigne rouge pour soulager les tensions et apaiser les jambes fatiguées.",
++      "category": "soins-pieds",
++      "price": 9500,
++      "image": "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=800&auto=format&fit=crop&q=80",
++      "stock": 2,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    },
++    {
++      "id": 10,
++      "name": "Brosse Démêlante Ergonomique Soie & Poils Doux",
++      "description": "Conçue pour démêler les cheveux délicats sans casser la fibre capillaire ni tirer sur le cuir chevelu. Finition dorée chic.",
++      "category": "accessoires",
++      "price": 12000,
++      "image": "https://images.unsplash.com/photo-1590159763121-7c9ff3149e0a?w=800&auto=format&fit=crop&q=80",
++      "stock": 25,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 11,
++      "name": "Kit Manucure Précision Doré en Cuir Véritable",
++      "description": "Trousse de luxe comprenant coupe-ongles de précision, pince à cuticules biseautée, lime en verre et repousse-ongles.",
++      "category": "accessoires",
++      "price": 24000,
++      "image": "https://images.unsplash.com/photo-1522337660859-02fbefca4702?w=800&auto=format&fit=crop&q=80",
++      "stock": 9,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": true
++    },
++    {
++      "id": 12,
++      "name": "Bonnet de Nuit en Soie Pure Glamour Rose",
++      "description": "Protège vos brushings, tresses et boucles naturelles contre les frottements nocturnes et préserve l’hydratation du cheveu.",
++      "category": "accessoires",
++      "price": 15000,
++      "image": "https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=800&auto=format&fit=crop&q=80",
++      "stock": 14,
++      "alertThreshold": 5,
++      "status": "active",
++      "featured": false
++    }
++  ],
++  "clients": [
++    {
++      "id": 1,
++      "name": "Kady Traoré",
++      "phone": "+225 07 11 22 33 44",
++      "email": "kady.traore@gmail.com",
++      "preferences": "Sensible du cuir chevelu. Préfère l’eau tiède et le thé à la menthe lors des soins. Vernis nude favori.",
++      "createdAt": "2026-02-14T10:30:00Z",
++      "lastVisit": "2026-10-10"
++    },
++    {
++      "id": 2,
++      "name": "Sarah Kouamé",
++      "phone": "+225 05 44 55 66 77",
++      "email": "sarah.kouame@yahoo.fr",
++      "preferences": "Aime les coupes graphiques et le vernis semi-permanent rouge carmin. Toujours ponctuelle.",
++      "createdAt": "2026-03-20T14:15:00Z",
++      "lastVisit": "2026-10-12"
++    },
++    {
++      "id": 3,
++      "name": "Chantal Bamba",
++      "phone": "+225 01 88 99 00 11",
++      "email": "chantal.bamba@outlook.com",
++      "preferences": "Adepte des tresses fines et des soins réguliers au karité bio. Allergie légère aux parfums synthétiques.",
++      "createdAt": "2026-05-08T09:00:00Z",
++      "lastVisit": "2026-09-28"
++    },
++    {
++      "id": 4,
++      "name": "Esther Ouloto",
++      "phone": "+225 07 99 88 77 66",
++      "email": "esther.ouloto@gmail.com",
++      "preferences": "Client VIP mariage. Soins complets mains et pieds avec nail art géométrique sobre.",
++      "createdAt": "2026-06-15T16:45:00Z",
++      "lastVisit": "2026-10-05"
++    },
++    {
++      "id": 5,
++      "name": "Olivia N'Guessan",
++      "phone": "+225 05 12 34 56 78",
++      "email": "olivia.nguessan@gmail.com",
++      "preferences": "Rendez-vous entre 12h et 14h de préférence. Soin des pieds complet tous les mois.",
++      "createdAt": "2026-07-02T11:20:00Z",
++      "lastVisit": "2026-10-08"
++    },
++    {
++      "id": 6,
++      "name": "Aude Mensah",
++      "phone": "+225 01 45 67 89 01",
++      "email": "aude.mensah@gmail.com",
++      "preferences": "Nouvelle cliente, souhaite tester les soins capillaires et la gamme d’huiles naturelles.",
++      "createdAt": "2026-09-10T15:00:00Z",
++      "lastVisit": "2026-09-25"
++    }
++  ],
++  "appointments": [
++    {
++      "id": 1,
++      "reference": "RDV-2026-001",
++      "clientId": 1,
++      "serviceId": 1,
++      "professionalId": 1,
++      "date": "2026-10-05",
++      "startTime": "10:00",
++      "endTime": "10:45",
++      "price": 15000,
++      "status": "completed",
++      "notes": "Cliente ravie du dégradé naturel. Shampoing traitant appliqué.",
++      "createdAt": "2026-10-01T09:12:00Z"
++    },
++    {
++      "id": 2,
++      "reference": "RDV-2026-002",
++      "clientId": 2,
++      "serviceId": 8,
++      "professionalId": 2,
++      "date": "2026-10-08",
++      "startTime": "14:00",
++      "endTime": "15:00",
++      "price": 22000,
++      "status": "completed",
++      "notes": "Pose chablons amande courte, finition nude brillant.",
++      "createdAt": "2026-10-02T15:40:00Z"
++    },
++    {
++      "id": 3,
++      "reference": "RDV-2026-003",
++      "clientId": 3,
++      "serviceId": 3,
++      "professionalId": 3,
++      "date": "2026-10-10",
++      "startTime": "09:30",
++      "endTime": "11:00",
++      "price": 30000,
++      "status": "completed",
++      "notes": "Tresses moyennes longueur épaules avec mèches naturelles fournies par le salon.",
++      "createdAt": "2026-10-04T18:20:00Z"
++    },
++    {
++      "id": 4,
++      "reference": "RDV-2026-004",
++      "clientId": 4,
++      "serviceId": 16,
++      "professionalId": 2,
++      "date": "2026-10-14",
++      "startTime": "11:00",
++      "endTime": "12:00",
++      "price": 28000,
++      "status": "confirmed",
++      "notes": "Préparation pour une cérémonie de mariage le week-end.",
++      "createdAt": "2026-10-09T11:15:00Z"
++    },
++    {
++      "id": 5,
++      "reference": "RDV-2026-005",
++      "clientId": 5,
++      "serviceId": 9,
++      "professionalId": 4,
++      "date": "2026-10-14",
++      "startTime": "15:00",
++      "endTime": "15:45",
++      "price": 18000,
++      "status": "confirmed",
++      "notes": "Teinte terracotta d’automne souhaitée.",
++      "createdAt": "2026-10-10T14:30:00Z"
++    },
++    {
++      "id": 6,
++      "reference": "RDV-2026-006",
++      "clientId": 6,
++      "serviceId": 6,
++      "professionalId": 1,
++      "date": "2026-10-15",
++      "startTime": "16:00",
++      "endTime": "17:00",
++      "price": 22000,
++      "status": "confirmed",
++      "notes": "Première séance d’un protocole de soin en 3 étapes.",
++      "createdAt": "2026-10-11T08:50:00Z"
++    },
++    {
++      "id": 7,
++      "reference": "RDV-2026-007",
++      "clientId": 2,
++      "serviceId": 4,
++      "professionalId": 1,
++      "date": "2026-10-17",
++      "startTime": "10:00",
++      "endTime": "12:00",
++      "price": 35000,
++      "status": "pending",
++      "notes": "Demande de conseil coloration caramel doré à confirmer avec la cliente.",
++      "createdAt": "2026-10-11T16:05:00Z"
++    },
++    {
++      "id": 8,
++      "reference": "RDV-2026-008",
++      "clientId": 1,
++      "serviceId": 11,
++      "professionalId": 4,
++      "date": "2026-10-12",
++      "startTime": "16:30",
++      "endTime": "17:15",
++      "price": 16000,
++      "status": "cancelled",
++      "notes": "Annulé par la cliente pour cause d’imprévu professionnel. Report prévu.",
++      "createdAt": "2026-10-06T10:00:00Z"
++    }
++  ],
++  "orders": [
++    {
++      "id": 1,
++      "reference": "CMD-2026-001",
++      "clientId": 1,
++      "items": [
++        {
++          "productId": 1,
++          "name": "Élixir Capillaire Régénérant Argan & Ricin (100ml)",
++          "price": 14500,
++          "quantity": 1
++        },
++        {
++          "productId": 4,
++          "name": "Huile Nourrissante Cuticules Rose & Amande (15ml)",
++          "price": 7500,
++          "quantity": 1
++        }
++      ],
++      "subtotal": 22000,
++      "discount": 2200,
++      "shippingFee": 2500,
++      "total": 22300,
++      "deliveryMethod": "delivery",
++      "shippingAddress": {
++        "recipient": "Kady Traoré",
++        "phone": "+225 07 11 22 33 44",
++        "street": "Rue des Jardins, Immeuble Flamboyant, Apt 4B",
++        "district": "Cocody Deux-Plateaux",
++        "city": "Abidjan",
++        "country": "Côte d'Ivoire"
++      },
++      "orderStatus": "delivered",
++      "paymentStatus": "paid",
++      "paymentMethod": "mobile_money",
++      "createdAt": "2026-10-02T11:30:00Z"
++    },
++    {
++      "id": 2,
++      "reference": "CMD-2026-002",
++      "clientId": 2,
++      "items": [
++        {
++          "productId": 11,
++          "name": "Kit Manucure Précision Doré en Cuir Véritable",
++          "price": 24000,
++          "quantity": 1
++        },
++        {
++          "productId": 5,
++          "name": "Vernis Gel Laqué Rouge Royal 12ml",
++          "price": 9000,
++          "quantity": 1
++        }
++      ],
++      "subtotal": 33000,
++      "discount": 5000,
++      "shippingFee": 0,
++      "total": 28000,
++      "deliveryMethod": "pickup",
++      "shippingAddress": {
++        "recipient": "Sarah Kouamé",
++        "phone": "+225 05 44 55 66 77",
++        "street": "Retrait sur place en boutique Glam'Or Beauty",
++        "city": "Abidjan",
++        "country": "Côte d'Ivoire"
++      },
++      "orderStatus": "ready_for_pickup",
++      "paymentStatus": "paid",
++      "paymentMethod": "card",
++      "createdAt": "2026-10-06T15:15:00Z"
++    },
++    {
++      "id": 3,
++      "reference": "CMD-2026-003",
++      "clientId": 3,
++      "items": [
++        {
++          "productId": 2,
++          "name": "Masque Réparateur Intense au Beurre de Karité (250ml)",
++          "price": 18000,
++          "quantity": 2
++        },
++        {
++          "productId": 10,
++          "name": "Brosse Démêlante Ergonomique Soie & Poils Doux",
++          "price": 12000,
++          "quantity": 1
++        }
++      ],
++      "subtotal": 48000,
++      "discount": 0,
++      "shippingFee": 2500,
++      "total": 50500,
++      "deliveryMethod": "delivery",
++      "shippingAddress": {
++        "recipient": "Chantal Bamba",
++        "phone": "+225 01 88 99 00 11",
++        "street": "Boulevard Latrille, Résidence Harmonie Villa 12",
++        "district": "Angré 7ème Tranche",
++        "city": "Abidjan",
++        "country": "Côte d'Ivoire"
++      },
++      "orderStatus": "shipped",
++      "paymentStatus": "paid",
++      "paymentMethod": "card",
++      "createdAt": "2026-10-08T09:45:00Z"
++    },
++    {
++      "id": 4,
++      "reference": "CMD-2026-004",
++      "clientId": 4,
++      "items": [
++        {
++          "productId": 7,
++          "name": "Baume Réparateur Talons Fendillés & Callosités (100ml)",
++          "price": 13000,
++          "quantity": 1
++        },
++        {
++          "productId": 8,
++          "name": "Gommage Exfoliant Pieds Menthe & Sel Marin (200g)",
++          "price": 11500,
++          "quantity": 1
++        },
++        {
++          "productId": 12,
++          "name": "Bonnet de Nuit en Soie Pure Glamour Rose",
++          "price": 15000,
++          "quantity": 1
++        }
++      ],
++      "subtotal": 39500,
++      "discount": 3950,
++      "shippingFee": 2500,
++      "total": 38050,
++      "deliveryMethod": "delivery",
++      "shippingAddress": {
++        "recipient": "Esther Ouloto",
++        "phone": "+225 07 99 88 77 66",
++        "street": "Zone 4C, Rue Pierre et Marie Curie",
++        "district": "Marcory",
++        "city": "Abidjan",
++        "country": "Côte d'Ivoire"
++      },
++      "orderStatus": "processing",
++      "paymentStatus": "paid",
++      "paymentMethod": "mobile_money",
++      "createdAt": "2026-10-11T10:10:00Z"
++    },
++    {
++      "id": 5,
++      "reference": "CMD-2026-005",
++      "clientId": 5,
++      "items": [
++        {
++          "productId": 3,
++          "name": "Shampoing Doux Sans Sulfate Éclat & Volume (300ml)",
++          "price": 11000,
++          "quantity": 1
++        }
++      ],
++      "subtotal": 11000,
++      "discount": 0,
++      "shippingFee": 0,
++      "total": 11000,
++      "deliveryMethod": "pickup",
++      "shippingAddress": {
++        "recipient": "Olivia N'Guessan",
++        "phone": "+225 05 12 34 56 78",
++        "street": "Retrait express au salon Glam'Or",
++        "city": "Abidjan",
++        "country": "Côte d'Ivoire"
++      },
++      "orderStatus": "pending",
++      "paymentStatus": "pending",
++      "paymentMethod": "cash",
++      "createdAt": "2026-10-11T14:50:00Z"
++    }
++  ],
++  "transactions": [
++    {
++      "id": 1,
++      "reference": "TXN-2026-001",
++      "orderId": 1,
++      "amount": 22300,
++      "paymentMethod": "mobile_money",
++      "status": "success",
++      "date": "2026-10-02T11:32:15Z",
++      "failureReason": null
++    },
++    {
++      "id": 2,
++      "reference": "TXN-2026-002",
++      "orderId": 2,
++      "amount": 28000,
++      "paymentMethod": "card",
++      "status": "success",
++      "date": "2026-10-06T15:16:40Z",
++      "failureReason": null
++    },
++    {
++      "id": 3,
++      "reference": "TXN-2026-003",
++      "orderId": 3,
++      "amount": 50500,
++      "paymentMethod": "card",
++      "status": "success",
++      "date": "2026-10-08T09:47:02Z",
++      "failureReason": null
++    },
++    {
++      "id": 4,
++      "reference": "TXN-2026-004",
++      "orderId": 4,
++      "amount": 38050,
++      "paymentMethod": "mobile_money",
++      "status": "success",
++      "date": "2026-10-11T10:12:30Z",
++      "failureReason": null
++    },
++    {
++      "id": 5,
++      "reference": "TXN-2026-005",
++      "orderId": 5,
++      "amount": 11000,
++      "paymentMethod": "cash",
++      "status": "pending",
++      "date": "2026-10-11T14:50:00Z",
++      "failureReason": "En attente de règlement au retrait en salon"
++    }
++  ],
++  "stockMovements": [
++    {
++      "id": 1,
++      "productId": 1,
++      "type": "entry",
++      "quantity": 25,
++      "date": "2026-09-25T08:30:00Z",
++      "note": "Réception arrivage fournisseur cosmétiques bio"
++    },
++    {
++      "id": 2,
++      "productId": 1,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-02T11:30:00Z",
++      "note": "Commande client CMD-2026-001"
++    },
++    {
++      "id": 3,
++      "productId": 4,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-02T11:30:00Z",
++      "note": "Commande client CMD-2026-001"
++    },
++    {
++      "id": 4,
++      "productId": 2,
++      "type": "exit",
++      "quantity": -2,
++      "date": "2026-10-04T17:00:00Z",
++      "note": "Utilisation interne pour cabine de coiffure"
++    },
++    {
++      "id": 5,
++      "productId": 11,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-06T15:15:00Z",
++      "note": "Commande client CMD-2026-002"
++    },
++    {
++      "id": 6,
++      "productId": 5,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-06T15:15:00Z",
++      "note": "Commande client CMD-2026-002"
++    },
++    {
++      "id": 7,
++      "productId": 2,
++      "type": "order",
++      "quantity": -2,
++      "date": "2026-10-08T09:45:00Z",
++      "note": "Commande client CMD-2026-003"
++    },
++    {
++      "id": 8,
++      "productId": 10,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-08T09:45:00Z",
++      "note": "Commande client CMD-2026-003"
++    },
++    {
++      "id": 9,
++      "productId": 6,
++      "type": "adjustment",
++      "quantity": -3,
++      "date": "2026-10-09T18:00:00Z",
++      "note": "Ajustement inventaire : produit épuisé et rupture confirmée"
++    },
++    {
++      "id": 10,
++      "productId": 7,
++      "type": "order",
++      "quantity": -1,
++      "date": "2026-10-11T10:10:00Z",
++      "note": "Commande client CMD-2026-004"
++    }
++  ],
++  "salonSettings": {
++    "name": "Glam'Or Beauty",
++    "slogan": "L'art de sublimer votre élégance naturelle",
++    "logo": null,
++    "phone": "+225 01 23 45 67 89",
++    "secondaryPhone": "+225 07 89 01 23 45",
++    "email": "contact@glamor-beauty.com",
++    "address": "12 Boulevard de la Beauté, Cocody Ambassades, Abidjan, Côte d'Ivoire",
++    "coordinates": {
++      "lat": 5.34,
++      "lng": -4.015
++    },
++    "openingHours": {
++      "monday": {
++        "open": "09:00",
++        "close": "19:00",
++        "isOpen": true
++      },
++      "tuesday": {
++        "open": "09:00",
++        "close": "19:00",
++        "isOpen": true
++      },
++      "wednesday": {
++        "open": "09:00",
++        "close": "19:00",
++        "isOpen": true
++      },
++      "thursday": {
++        "open": "09:00",
++        "close": "19:00",
++        "isOpen": true
++      },
++      "friday": {
++        "open": "09:00",
++        "close": "20:00",
++        "isOpen": true
++      },
++      "saturday": {
++        "open": "09:00",
++        "close": "20:00",
++        "isOpen": true
++      },
++      "sunday": {
++        "open": null,
++        "close": null,
++        "isOpen": false
++      }
++    },
++    "closedDates": [
++      "2026-12-25",
++      "2026-01-01",
++      "2026-05-01",
++      "2026-08-07"
++    ],
++    "slotDuration": 30,
++    "categories": [
++      {
++        "id": "coiffure",
++        "name": "Coiffure & Soins Capillaires",
++        "icon": "Scissors",
++        "count": 6
++      },
++      {
++        "id": "manucure",
++        "name": "Manucure & Onglerie",
++        "icon": "Sparkles",
++        "count": 5
++      },
++      {
++        "id": "pedicure",
++        "name": "Pédicure & Soins des Pieds",
++        "icon": "Footprints",
++        "count": 5
++      }
++    ],
++    "productCategories": [
++      {
++        "id": "capillaire",
++        "name": "Soins Capillaires"
++      },
++      {
++        "id": "manucure",
++        "name": "Beauté des Mains"
++      },
++      {
++        "id": "soins-pieds",
++        "name": "Soins des Pieds"
++      },
++      {
++        "id": "accessoires",
++        "name": "Accessoires & Outils"
++      }
++    ],
++    "stockAlertThreshold": 5,
++    "paymentMethods": [
++      {
++        "id": "card",
++        "name": "Carte bancaire (Visa / Mastercard)",
++        "active": true
++      },
++      {
++        "id": "mobile_money",
++        "name": "Mobile Money (Wave, Orange, MTN, Moov)",
++        "active": true
++      },
++      {
++        "id": "cash",
++        "name": "Paiement au salon / à la livraison",
++        "active": true
++      }
++    ],
++    "shippingFee": 2500,
++    "freeShippingThreshold": 50000,
++    "freePickup": true,
++    "promoCodes": [
++      {
++        "code": "BIENVENUE10",
++        "discount": 10,
++        "type": "percentage",
++        "minOrderAmount": 15000,
++        "description": "10% de réduction sur votre première commande",
++        "validUntil": "2026-12-31"
++      },
++      {
++        "code": "BEAUTY5000",
++        "discount": 5000,
++        "type": "fixed",
++        "minOrderAmount": 25000,
++        "description": "5 000 FCFA de remise dès 25 000 FCFA d'achats",
++        "validUntil": "2026-11-30"
++      }
++    ],
++    "currency": "FCFA",
++    "currencySymbol": "FCFA",
++    "socialMedia": {
++      "instagram": "https://instagram.com/glamor_beauty_abidjan",
++      "facebook": "https://facebook.com/glamorbeautyci",
++      "whatsapp": "https://wa.me/2250123456789"
++    }
++  }
++}
+\ No newline at end of file
+diff --git a/resources/js/Components/admin/AdminLayout.jsx b/resources/js/Components/admin/AdminLayout.jsx
+index 19cae99..c02887e 100644
+--- a/resources/js/Components/admin/AdminLayout.jsx
++++ b/resources/js/Components/admin/AdminLayout.jsx
+@@ -1,8 +1,9 @@
+ import { useState, useEffect } from 'react';
++import ServerHydrator from '../common/ServerHydrator';
+ import { NavLink, Outlet, useNavigate, useLocation, Navigate } from 'react-router-dom';
+-import { useAuth } from '../../contexts/AuthContext';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useAuth } from '../../Contexts/AuthContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import {
+   LayoutDashboard,
+   Calendar,
+@@ -41,7 +42,7 @@ const ROLE_LABELS = {
+   employee: 'Collaboratrice',
+ };
+ 
+-export default function AdminLayout() {
++export default function AdminLayout({ children }) {
+   const { user, isAuthenticated, logout, hasPermission } = useAuth();
+   const { notifications, dispatch } = useData();
+   const { info } = useToast();
+@@ -76,9 +77,8 @@ export default function AdminLayout() {
+   const unreadCount = unreadNotifications.length;
+ 
+   const handleLogout = () => {
+-    logout();
+     info('Vous êtes déconnecté.');
+-    navigate('/admin/login', { replace: true });
++    logout();
+   };
+ 
+   const handleMarkAllRead = () => {
+@@ -91,6 +91,7 @@ export default function AdminLayout() {
+ 
+   return (
+     <div className="admin-root">
++      <ServerHydrator />
+       {/* Mobile Backdrop */}
+       {mobileMenuOpen && (
+         <div
+diff --git a/resources/js/Components/common/ServerHydrator.jsx b/resources/js/Components/common/ServerHydrator.jsx
+new file mode 100644
+index 0000000..4c9e399
+--- /dev/null
++++ b/resources/js/Components/common/ServerHydrator.jsx
+@@ -0,0 +1,22 @@
++import { useLayoutEffect } from 'react';
++import { usePage } from '@inertiajs/react';
++import { useData } from '../../Contexts/DataContext';
++import { normalizeCollections, dataScope } from '../../Data/normalize';
++
++/**
++ * Injecte dans l'état du front les données envoyées par Laravel pour la page courante.
++ * Placé dans les layouts ; la première page est déjà appliquée par DataProvider.
++ */
++export default function ServerHydrator() {
++  const { props, component } = usePage();
++  const { dispatch } = useData();
++
++  useLayoutEffect(() => {
++    const payload = normalizeCollections(props);
++    if (Object.keys(payload).length) {
++      dispatch({ type: 'HYDRATE', payload, scope: dataScope(component, props) });
++    }
++  }, [props, component, dispatch]);
++
++  return null;
++}
+diff --git a/resources/js/Components/layout/Footer.jsx b/resources/js/Components/layout/Footer.jsx
+index 3aca263..441152d 100644
+--- a/resources/js/Components/layout/Footer.jsx
++++ b/resources/js/Components/layout/Footer.jsx
+@@ -11,8 +11,8 @@ import {
+   Shield
+ } from 'lucide-react';
+ import { Instagram, Facebook } from '../common/SocialIcons';
+-import { salonSettings } from '../../data/demoData';
+-import { useData } from '../../contexts/DataContext';
++import { salonSettings } from '../../Data/demoData';
++import { useData } from '../../Contexts/DataContext';
+ import './Footer.css';
+ 
+ export default function Footer() {
+diff --git a/resources/js/Components/layout/Header.jsx b/resources/js/Components/layout/Header.jsx
+index 961bcb5..67eef1c 100644
+--- a/resources/js/Components/layout/Header.jsx
++++ b/resources/js/Components/layout/Header.jsx
+@@ -1,7 +1,7 @@
+ import React, { useState, useEffect } from 'react';
+ import { NavLink, Link, useLocation } from 'react-router-dom';
+ import { ShoppingBag, Menu, X, Calendar, Sparkles } from 'lucide-react';
+-import { useCart } from '../../contexts/CartContext';
++import { useCart } from '../../Contexts/CartContext';
+ import './Header.css';
+ 
+ export default function Header() {
+diff --git a/resources/js/Components/layout/PublicLayout.jsx b/resources/js/Components/layout/PublicLayout.jsx
+index a905b3a..2e2c8ba 100644
+--- a/resources/js/Components/layout/PublicLayout.jsx
++++ b/resources/js/Components/layout/PublicLayout.jsx
+@@ -2,6 +2,7 @@ import React from 'react';
+ import { useLocation } from 'react-router-dom';
+ import Header from './Header';
+ import Footer from './Footer';
++import ServerHydrator from '../common/ServerHydrator';
+ import './PublicLayout.css';
+ 
+ export default function PublicLayout({ children }) {
+@@ -14,6 +15,7 @@ export default function PublicLayout({ children }) {
+ 
+   return (
+     <div className="public-layout-root">
++      <ServerHydrator />
+       <Header />
+       <main className="public-main-content" id="main-content">
+         {children}
+diff --git a/resources/js/Contexts/AuthContext.jsx b/resources/js/Contexts/AuthContext.jsx
+index 7268e09..75b363c 100644
+--- a/resources/js/Contexts/AuthContext.jsx
++++ b/resources/js/Contexts/AuthContext.jsx
+@@ -1,98 +1,35 @@
+-import { createContext, useContext, useReducer, useCallback } from 'react';
+-import { demoAccounts } from '../data/demoData';
+-
+-const AuthContext = createContext();
+-
+-const STORAGE_KEY = 'glamor_auth';
+-
+-function loadAuth() {
+-  try {
+-    const saved = localStorage.getItem(STORAGE_KEY);
+-    return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
+-  } catch {
+-    return { user: null, isAuthenticated: false };
+-  }
+-}
+-
+-function authReducer(state, action) {
+-  let newState;
+-  switch (action.type) {
+-    case 'LOGIN':
+-      newState = { user: action.payload, isAuthenticated: true };
+-      break;
+-    case 'LOGOUT':
+-      newState = { user: null, isAuthenticated: false };
+-      break;
+-    default:
+-      return state;
+-  }
+-  try {
+-    if (newState.isAuthenticated) {
+-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
+-    } else {
+-      localStorage.removeItem(STORAGE_KEY);
+-    }
+-  } catch { /* silently fail */ }
+-  return newState;
+-}
+-
+-export function AuthProvider({ children }) {
+-  const [state, dispatch] = useReducer(authReducer, null, loadAuth);
+-
+-  const login = useCallback((username, password) => {
+-    const account = demoAccounts.find(
+-      a => a.username === username && a.password === password
+-    );
+-    if (account) {
+-      dispatch({
+-        type: 'LOGIN',
+-        payload: {
+-          username: account.username,
+-          name: account.name,
+-          role: account.role,
+-          professionalId: account.professionalId || null
+-        }
+-      });
+-      return { success: true, user: account };
+-    }
+-    return { success: false, error: 'Identifiants incorrects' };
+-  }, []);
+-
+-  const logout = useCallback(() => {
+-    dispatch({ type: 'LOGOUT' });
+-  }, []);
+-
+-  const hasPermission = useCallback((module) => {
+-    if (!state.user) return false;
+-    const { role } = state.user;
+-    if (role === 'admin') return true;
+-
+-    const managerModules = ['dashboard', 'appointments', 'services', 'products', 'orders', 'payments', 'clients', 'staff'];
+-    if (role === 'manager') return managerModules.includes(module);
++import { router, usePage } from '@inertiajs/react';
++
++// Modules accessibles par rôle. Ceci ne sert qu'à adapter l'interface :
++// l'autorisation réelle est appliquée côté serveur (middleware `module`).
++const ROLE_MODULES = {
++  admin: ['*'],
++  manager: ['dashboard', 'appointments', 'services', 'products', 'orders', 'payments', 'clients', 'staff'],
++  employee: ['dashboard', 'appointments'],
++};
++
++/**
++ * Utilisateur authentifié, fourni par Laravel via les props partagées Inertia.
++ * À utiliser dans les pages et layouts (à l'intérieur de <App />).
++ */
++export function useAuth() {
++  const user = usePage().props.auth?.user ?? null;
+ 
+-    const employeeModules = ['dashboard', 'appointments'];
+-    if (role === 'employee') return employeeModules.includes(module);
++  const hasPermission = (module) => {
++    if (!user) return false;
++    const modules = ROLE_MODULES[user.role] ?? [];
++    return modules.includes('*') || modules.includes(module);
++  };
+ 
+-    return false;
+-  }, [state.user]);
++  // Rechargement complet après déconnexion : vide les données chargées en mémoire.
++  const logout = () => router.post('/admin/logout', {}, {
++    onFinish: () => window.location.assign('/admin/login'),
++  });
+ 
+-  const value = {
+-    user: state.user,
+-    isAuthenticated: state.isAuthenticated,
+-    login,
++  return {
++    user: user && { ...user, professionalId: user.professional_id },
++    isAuthenticated: !!user,
+     logout,
+     hasPermission,
+   };
+-
+-  return (
+-    <AuthContext.Provider value={value}>
+-      {children}
+-    </AuthContext.Provider>
+-  );
+-}
+-
+-export function useAuth() {
+-  const context = useContext(AuthContext);
+-  if (!context) throw new Error('useAuth must be used within AuthProvider');
+-  return context;
+ }
+diff --git a/resources/js/Contexts/DataContext.jsx b/resources/js/Contexts/DataContext.jsx
+index 49bca5a..7887935 100644
+--- a/resources/js/Contexts/DataContext.jsx
++++ b/resources/js/Contexts/DataContext.jsx
+@@ -1,4 +1,5 @@
+ import { createContext, useContext, useReducer, useCallback } from 'react';
++import { normalizeCollections, dataScope } from '../Data/normalize';
+ import {
+   appointments as initialAppointments,
+   orders as initialOrders,
+@@ -10,41 +11,54 @@ import {
+   stockMovements as initialMovements,
+   notifications as initialNotifications,
+   salonSettings as initialSettings,
+-} from '../data/demoData';
++} from '../Data/demoData';
+ 
+ const DataContext = createContext();
+ 
+-const STORAGE_KEY = 'glamor_data';
+-
+-function loadData() {
+-  try {
+-    const saved = localStorage.getItem(STORAGE_KEY);
+-    if (saved) return JSON.parse(saved);
+-  } catch { /* fall through */ }
+-  return {
+-    appointments: initialAppointments,
+-    orders: initialOrders,
+-    transactions: initialTransactions,
+-    clients: initialClients,
++// Ces collections sont fournies par le serveur (base de données). Les écritures faites
++// depuis l'interface restent pour l'instant en mémoire (non enregistrées en base).
++// Les données privées démarrent vides ; le catalogue garde un repli de démonstration
++// le temps que les props serveur soient appliquées.
++function buildInitialState(page) {
++  const base = {
++    appointments: [],
++    busySlots: [],
++    orders: [],
++    transactions: [],
++    clients: [],
++    stockMovements: [],
+     services: initialServices,
+     products: initialProducts,
+     professionals: initialProfessionals,
+-    stockMovements: initialMovements,
+-    notifications: initialNotifications,
+     settings: initialSettings,
+-    counters: { appointment: initialAppointments.length, order: initialOrders.length, transaction: initialTransactions.length },
++    notifications: initialNotifications,
++    counters: { appointment: 0, order: 0, transaction: 0 },
++    hydrated: {},
+   };
++  if (!page) return base;
++  return hydrate(base, normalizeCollections(page.props), dataScope(page.component, page.props));
+ }
+ 
+-function saveData(state) {
+-  try {
+-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+-  } catch { /* silently fail */ }
++/** Applique les collections serveur, une seule fois par collection et par espace (scope),
++ *  pour ne pas écraser les modifications locales pendant la navigation. */
++function hydrate(state, payload, scope) {
++  const next = { ...state, hydrated: { ...state.hydrated }, counters: { ...state.counters } };
++  const counterKeys = { appointments: 'appointment', orders: 'order', transactions: 'transaction' };
++  for (const [key, value] of Object.entries(payload)) {
++    if (next.hydrated[key] === scope) continue;
++    next[key] = value;
++    next.hydrated[key] = scope;
++    if (counterKeys[key]) next.counters[counterKeys[key]] = value.length;
++  }
++  return next;
+ }
+ 
+ function dataReducer(state, action) {
+   let newState;
+   switch (action.type) {
++    case 'HYDRATE':
++      return hydrate(state, action.payload, action.scope);
++
+     // === APPOINTMENTS ===
+     case 'ADD_APPOINTMENT': {
+       const counter = (state.counters.appointment || state.appointments.length) + 1;
+@@ -268,19 +282,17 @@ function dataReducer(state, action) {
+ 
+     // === RESET ===
+     case 'RESET_DATA':
+-      localStorage.removeItem(STORAGE_KEY);
+-      return loadData();
++      return buildInitialState(null);
+ 
+     default:
+       return state;
+   }
+ 
+-  saveData(newState);
+   return newState;
+ }
+ 
+-export function DataProvider({ children }) {
+-  const [state, dispatch] = useReducer(dataReducer, null, loadData);
++export function DataProvider({ children, initialPage }) {
++  const [state, dispatch] = useReducer(dataReducer, initialPage, buildInitialState);
+ 
+   // Helper to find or create client
+   const findOrCreateClient = useCallback((clientInfo) => {
+@@ -303,7 +315,7 @@ export function DataProvider({ children }) {
+ 
+   // Check slot availability
+   const isSlotAvailable = useCallback((professionalId, date, startTime, endTime, excludeAppointmentId = null) => {
+-    return !state.appointments.some(apt =>
++    return ![...state.appointments, ...state.busySlots].some(apt =>
+       apt.id !== excludeAppointmentId &&
+       apt.professionalId === professionalId &&
+       apt.date === date &&
+@@ -312,7 +324,7 @@ export function DataProvider({ children }) {
+        (endTime > apt.startTime && endTime <= apt.endTime) ||
+        (startTime <= apt.startTime && endTime >= apt.endTime))
+     );
+-  }, [state.appointments]);
++  }, [state.appointments, state.busySlots]);
+ 
+   const value = {
+     ...state,
+diff --git a/resources/js/Data/demoData.js b/resources/js/Data/demoData.js
+index bad3fe1..4820a27 100644
+--- a/resources/js/Data/demoData.js
++++ b/resources/js/Data/demoData.js
+@@ -990,36 +990,6 @@ export const salonSettings = {
+ // ==========================================
+ // 10. COMPTES DE DÉMONSTRATION
+ // ==========================================
+-export const demoAccounts = [
+-  {
+-    id: 1,
+-    username: 'admin',
+-    password: 'admin123',
+-    role: 'admin',
+-    name: 'Directrice du Salon',
+-    email: 'directrice@glamor-beauty.com',
+-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
+-  },
+-  {
+-    id: 2,
+-    username: 'manager',
+-    password: 'manager123',
+-    role: 'manager',
+-    name: 'Responsable Opérationnelle',
+-    email: 'manager@glamor-beauty.com',
+-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80'
+-  },
+-  {
+-    id: 3,
+-    username: 'employee',
+-    password: 'employee123',
+-    role: 'employee',
+-    name: 'Aminata Diallo',
+-    email: 'aminata.diallo@glamor-beauty.com',
+-    professionalId: 1,
+-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
+-  }
+-];
+ 
+ // ==========================================
+ // 11. NOTIFICATIONS
+@@ -1032,7 +1002,7 @@ export const notifications = [
+     message: 'Le rendez-vous RDV-2026-006 pour Olivia N\'Guessan a été confirmé avec Aminata Diallo pour le 15 Oct.',
+     date: '2026-10-11T08:50:00Z',
+     read: false,
+-    link: '/admin/appointments'
++    link: '/admin/rendez-vous'
+   },
+   {
+     id: 2,
+@@ -1041,7 +1011,7 @@ export const notifications = [
+     message: 'Le produit "Crème Mains Veloutée Hydratation Intense" est actuellement en rupture de stock (0 unité).',
+     date: '2026-10-11T09:15:00Z',
+     read: false,
+-    link: '/admin/products'
++    link: '/admin/produits'
+   },
+   {
+     id: 3,
+@@ -1050,7 +1020,7 @@ export const notifications = [
+     message: 'Commande CMD-2026-004 de 38 050 FCFA passée par Esther Ouloto (Paiement Mobile Money validé).',
+     date: '2026-10-11T10:12:00Z',
+     read: true,
+-    link: '/admin/orders'
++    link: '/admin/commandes'
+   },
+   {
+     id: 4,
+@@ -1059,7 +1029,7 @@ export const notifications = [
+     message: 'Le stock de "Spray Fraîcheur & Décongestion" est tombé à 2 unités (seuil d\'alerte : 5).',
+     date: '2026-10-10T16:00:00Z',
+     read: true,
+-    link: '/admin/products'
++    link: '/admin/produits'
+   },
+   {
+     id: 5,
+@@ -1068,7 +1038,7 @@ export const notifications = [
+     message: 'Kady Traoré a annulé son rendez-vous RDV-2026-008 du 12 Octobre.',
+     date: '2026-10-10T11:20:00Z',
+     read: true,
+-    link: '/admin/appointments'
++    link: '/admin/rendez-vous'
+   }
+ ];
+ 
+@@ -1085,7 +1055,6 @@ const demoData = {
+   transactions,
+   stockMovements,
+   salonSettings,
+-  demoAccounts,
+   notifications
+ };
+ 
+diff --git a/resources/js/Data/normalize.js b/resources/js/Data/normalize.js
+new file mode 100644
+index 0000000..3cb8c08
+--- /dev/null
++++ b/resources/js/Data/normalize.js
+@@ -0,0 +1,105 @@
++// Adapte les données renvoyées par Laravel (snake_case, relations en objets)
++// à la forme attendue par les composants du front (camelCase, relations en identifiants).
++
++const ids = (list) => (list ?? []).map((item) => (item !== null && typeof item === 'object' ? item.id : item));
++const day = (value) => (value ? String(value).slice(0, 10) : null);
++
++export function normalizeService(service) {
++  return { ...service, professionals: ids(service.professionals) };
++}
++
++export function normalizeProfessional(pro) {
++  const { working_hours, days_off, blocked_slots, ...rest } = pro;
++  return {
++    ...rest,
++    specialties: pro.specialties ?? [],
++    services: ids(pro.services),
++    workingHours: working_hours ?? {},
++    breaks: pro.breaks ?? [],
++    daysOff: days_off ?? [],
++    blockedSlots: blocked_slots ?? [],
++  };
++}
++
++export function normalizeProduct(product) {
++  const { alert_threshold, ...rest } = product;
++  return { ...rest, alertThreshold: alert_threshold };
++}
++
++export function normalizeClient(client) {
++  const { last_visit, created_at, ...rest } = client;
++  return { ...rest, lastVisit: day(last_visit), createdAt: created_at };
++}
++
++export function normalizeAppointment(apt) {
++  const { client_id, service_id, professional_id, start_time, end_time, created_at, ...rest } = apt;
++  return {
++    ...rest,
++    clientId: client_id,
++    serviceId: service_id,
++    professionalId: professional_id,
++    startTime: start_time,
++    endTime: end_time,
++    createdAt: created_at,
++  };
++}
++
++export function normalizeOrder(order) {
++  const { client_id, shipping_fee, delivery_method, shipping_address, order_status, payment_status, payment_method, created_at, items, ...rest } = order;
++  return {
++    ...rest,
++    clientId: client_id,
++    shippingFee: shipping_fee,
++    deliveryMethod: delivery_method,
++    shippingAddress: shipping_address,
++    orderStatus: order_status,
++    paymentStatus: payment_status,
++    paymentMethod: payment_method,
++    createdAt: created_at,
++    items: (items ?? []).map((i) => ({ productId: i.product_id, name: i.name, price: i.price, quantity: i.quantity })),
++  };
++}
++
++export function normalizeTransaction(txn) {
++  const { order_id, payment_method, failure_reason, created_at, ...rest } = txn;
++  return { ...rest, orderId: order_id, paymentMethod: payment_method, failureReason: failure_reason, date: created_at };
++}
++
++export function normalizeStockMovement(movement) {
++  const { product_id, created_at, ...rest } = movement;
++  return { ...rest, productId: product_id, date: created_at };
++}
++
++const COLLECTIONS = {
++  services: normalizeService,
++  professionals: normalizeProfessional,
++  products: normalizeProduct,
++  clients: normalizeClient,
++  appointments: normalizeAppointment,
++  busySlots: normalizeAppointment,
++  orders: normalizeOrder,
++  transactions: normalizeTransaction,
++  stockMovements: normalizeStockMovement,
++};
++
++/**
++ * Extrait des props Inertia les collections connues et les convertit au format du front.
++ * Seules les clés présentes dans les props sont renvoyées.
++ */
++export function normalizeCollections(props = {}) {
++  const result = {};
++  for (const [key, normalize] of Object.entries(COLLECTIONS)) {
++    if (Array.isArray(props[key])) result[key] = props[key].map(normalize);
++  }
++  // Les réglages arrivent déjà au bon format (objet clé → valeur) ; un objet vide
++  // (sérialisé en [] par PHP) est ignoré pour conserver les valeurs de repli.
++  if (props.settings && !Array.isArray(props.settings) && Object.keys(props.settings).length) {
++    result.settings = props.settings;
++  }
++  return result;
++}
++
++/** Espace de données d'une page : public, ou admin propre à l'utilisateur connecté. */
++export function dataScope(component, props = {}) {
++  return component?.startsWith('admin/') ? `admin:${props.auth?.user?.id ?? 'anon'}` : 'public';
++}
+diff --git a/resources/js/Pages/About.jsx b/resources/js/Pages/About.jsx
+index 33a1ebe..b1376df 100644
+--- a/resources/js/Pages/About.jsx
++++ b/resources/js/Pages/About.jsx
+@@ -11,8 +11,8 @@ import {
+   Camera,
+   Scissors
+ } from 'lucide-react';
+-import { professionals as defaultProfessionals } from '../data/demoData';
+-import { useData } from '../contexts/DataContext';
++import { professionals as defaultProfessionals } from '../Data/demoData';
++import { useData } from '../Contexts/DataContext';
+ import './About.css';
+ 
+ const valuesList = [
+diff --git a/resources/js/Pages/Booking.jsx b/resources/js/Pages/Booking.jsx
+index cf84666..5a1d948 100644
+--- a/resources/js/Pages/Booking.jsx
++++ b/resources/js/Pages/Booking.jsx
+@@ -23,8 +23,8 @@ import {
+   RefreshCw,
+   Users
+ } from 'lucide-react';
+-import { useData } from '../contexts/DataContext';
+-import { useToast } from '../contexts/ToastContext';
++import { useData } from '../Contexts/DataContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Booking.css';
+ 
+ const STEPS = [
+diff --git a/resources/js/Pages/Cart.jsx b/resources/js/Pages/Cart.jsx
+index 1508746..94d7da0 100644
+--- a/resources/js/Pages/Cart.jsx
++++ b/resources/js/Pages/Cart.jsx
+@@ -14,9 +14,9 @@ import {
+   AlertCircle,
+   Check
+ } from 'lucide-react';
+-import { useCart } from '../contexts/CartContext';
+-import { useData } from '../contexts/DataContext';
+-import { useToast } from '../contexts/ToastContext';
++import { useCart } from '../Contexts/CartContext';
++import { useData } from '../Contexts/DataContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Cart.css';
+ 
+ export default function Cart() {
+diff --git a/resources/js/Pages/Checkout.jsx b/resources/js/Pages/Checkout.jsx
+index 45d6d91..e65aa24 100644
+--- a/resources/js/Pages/Checkout.jsx
++++ b/resources/js/Pages/Checkout.jsx
+@@ -23,9 +23,9 @@ import {
+   MapPin,
+   Sparkles
+ } from 'lucide-react';
+-import { useCart } from '../contexts/CartContext';
+-import { useData } from '../contexts/DataContext';
+-import { useToast } from '../contexts/ToastContext';
++import { useCart } from '../Contexts/CartContext';
++import { useData } from '../Contexts/DataContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Checkout.css';
+ 
+ const CHECKOUT_STEPS = [
+diff --git a/resources/js/Pages/Contact.jsx b/resources/js/Pages/Contact.jsx
+index 6ff1567..4c79050 100644
+--- a/resources/js/Pages/Contact.jsx
++++ b/resources/js/Pages/Contact.jsx
+@@ -12,10 +12,10 @@ import {
+   CheckCircle2,
+   AlertCircle
+ } from 'lucide-react';
+-import { Instagram, Facebook } from '../components/common/SocialIcons';
+-import { salonSettings as defaultSettings } from '../data/demoData';
+-import { useData } from '../contexts/DataContext';
+-import { useToast } from '../contexts/ToastContext';
++import { Instagram, Facebook } from '../Components/common/SocialIcons';
++import { salonSettings as defaultSettings } from '../Data/demoData';
++import { useData } from '../Contexts/DataContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Contact.css';
+ 
+ const daysTranslation = {
+diff --git a/resources/js/Pages/Home.jsx b/resources/js/Pages/Home.jsx
+index 15f6d79..abea798 100644
+--- a/resources/js/Pages/Home.jsx
++++ b/resources/js/Pages/Home.jsx
+@@ -12,10 +12,10 @@ import {
+   Calendar,
+   CheckCircle2
+ } from 'lucide-react';
+-import { services as defaultServices, products as defaultProducts } from '../data/demoData';
+-import { useData } from '../contexts/DataContext';
+-import { useCart } from '../contexts/CartContext';
+-import { useToast } from '../contexts/ToastContext';
++import { services as defaultServices, products as defaultProducts } from '../Data/demoData';
++import { useData } from '../Contexts/DataContext';
++import { useCart } from '../Contexts/CartContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Home.css';
+ 
+ const formatPrice = (price) => {
+diff --git a/resources/js/Pages/Services.jsx b/resources/js/Pages/Services.jsx
+index 91ec6b3..abca15b 100644
+--- a/resources/js/Pages/Services.jsx
++++ b/resources/js/Pages/Services.jsx
+@@ -14,11 +14,7 @@ import {
+   ArrowRight,
+   Info
+ } from 'lucide-react';
+-import { 
+-  services as defaultServices, 
+-  professionals as defaultProfessionals 
+-} from '../data/demoData';
+-import { useData } from '../contexts/DataContext';
++import { useData } from '../Contexts/DataContext';
+ import './Services.css';
+ 
+ const formatPrice = (price) => {
+@@ -40,17 +36,17 @@ const categoryIcons = {
+ };
+ 
+ export default function Services() {
++  const { services, professionals } = useData();
+   const [searchParams, setSearchParams] = useSearchParams();
+   const navigate = useNavigate();
+-  const data = useData();
+ 
+   const servicesList = useMemo(() => {
+-    return (data?.services || defaultServices).filter(s => s.status === 'active');
+-  }, [data?.services]);
++    return services.filter(s => s.status === 'active');
++  }, [services]);
+ 
+   const professionalsList = useMemo(() => {
+-    return (data?.professionals || defaultProfessionals).filter(p => p.status === 'active');
+-  }, [data?.professionals]);
++    return professionals.filter(p => p.status === 'active');
++  }, [professionals]);
+ 
+   // Read initial category from query param
+   const initialCategory = searchParams.get('category') || 'all';
+diff --git a/resources/js/Pages/Shop.jsx b/resources/js/Pages/Shop.jsx
+index 292f692..34502f3 100644
+--- a/resources/js/Pages/Shop.jsx
++++ b/resources/js/Pages/Shop.jsx
+@@ -12,10 +12,10 @@ import {
+   Truck,
+   RotateCcw
+ } from 'lucide-react';
+-import { products as defaultProducts } from '../data/demoData';
+-import { useData } from '../contexts/DataContext';
+-import { useCart } from '../contexts/CartContext';
+-import { useToast } from '../contexts/ToastContext';
++import { products as defaultProducts } from '../Data/demoData';
++import { useData } from '../Contexts/DataContext';
++import { useCart } from '../Contexts/CartContext';
++import { useToast } from '../Contexts/ToastContext';
+ import './Shop.css';
+ 
+ const formatPrice = (price) => {
+diff --git a/resources/js/Pages/admin/AdminAppointments.jsx b/resources/js/Pages/admin/AdminAppointments.jsx
+index 45274a2..0f95e5d 100644
+--- a/resources/js/Pages/admin/AdminAppointments.jsx
++++ b/resources/js/Pages/admin/AdminAppointments.jsx
+@@ -1,6 +1,6 @@
+ import { useState, useMemo } from 'react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import {
+   Calendar as CalendarIcon,
+   List,
+diff --git a/resources/js/Pages/admin/AdminClients.jsx b/resources/js/Pages/admin/AdminClients.jsx
+index 8d4e2c8..808ff06 100644
+--- a/resources/js/Pages/admin/AdminClients.jsx
++++ b/resources/js/Pages/admin/AdminClients.jsx
+@@ -15,8 +15,8 @@ import {
+   X,
+   UserCheck
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminClients.css';
+ 
+ export default function AdminClients() {
+diff --git a/resources/js/Pages/admin/AdminLogin.jsx b/resources/js/Pages/admin/AdminLogin.jsx
+index a726fbb..d8e8e27 100644
+--- a/resources/js/Pages/admin/AdminLogin.jsx
++++ b/resources/js/Pages/admin/AdminLogin.jsx
+@@ -1,48 +1,17 @@
+-import { useState } from 'react';
+-import { useNavigate, useLocation } from 'react-router-dom';
+-import { useAuth } from '../../contexts/AuthContext';
+-import { useToast } from '../../contexts/ToastContext';
+-import { Sparkles, Lock, User, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
++import { useForm } from '@inertiajs/react';
++import { Sparkles, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
+ import './AdminLogin.css';
+ 
+ export default function AdminLogin() {
+-  const [username, setUsername] = useState('');
+-  const [password, setPassword] = useState('');
+-  const [error, setError] = useState('');
+-  const [loading, setLoading] = useState(false);
+-
+-  const { login } = useAuth();
+-  const { success } = useToast();
+-  const navigate = useNavigate();
+-  const location = useLocation();
+-
+-  const from = location.state?.from?.pathname || '/admin';
++  const { data, setData, post, processing, errors } = useForm({
++    email: '',
++    password: '',
++    remember: false,
++  });
+ 
+   const handleSubmit = (e) => {
+     e.preventDefault();
+-    setError('');
+-
+-    if (!username.trim() || !password.trim()) {
+-      setError('Veuillez renseigner votre nom d’utilisateur et mot de passe.');
+-      return;
+-    }
+-
+-    setLoading(true);
+-    const result = login(username.trim(), password);
+-
+-    if (result.success) {
+-      success(`Bienvenue, ${result.user.name} !`);
+-      navigate(from, { replace: true });
+-    } else {
+-      setError(result.error || 'Identifiants incorrects. Veuillez réessayer.');
+-      setLoading(false);
+-    }
+-  };
+-
+-  const fillCredentials = (user, pass) => {
+-    setUsername(user);
+-    setPassword(pass);
+-    setError('');
++    post('/admin/login');
+   };
+ 
+   return (
+@@ -62,25 +31,25 @@ export default function AdminLogin() {
+         </div>
+ 
+         {/* Error Alert */}
+-        {error && (
++        {(errors.email || errors.password) && (
+           <div className="admin-login-alert">
+             <AlertCircle size={18} />
+-            <span>{error}</span>
++            <span>{errors.email || errors.password}</span>
+           </div>
+         )}
+ 
+         {/* Form */}
+         <form onSubmit={handleSubmit} className="admin-login-form">
+           <div className="admin-login-group">
+-            <label htmlFor="username">Identifiant / Nom d'utilisateur</label>
++            <label htmlFor="email">Adresse e-mail</label>
+             <div className="admin-login-input-wrap">
+-              <User size={18} className="input-icon" />
++              <Mail size={18} className="input-icon" />
+               <input
+-                id="username"
+-                type="text"
+-                value={username}
+-                onChange={(e) => setUsername(e.target.value)}
+-                placeholder="Ex: admin, manager, employee"
++                id="email"
++                type="email"
++                value={data.email}
++                onChange={(e) => setData('email', e.target.value)}
++                placeholder="vous@glamor-beauty.com"
+                 autoComplete="username"
+                 required
+               />
+@@ -94,8 +63,8 @@ export default function AdminLogin() {
+               <input
+                 id="password"
+                 type="password"
+-                value={password}
+-                onChange={(e) => setPassword(e.target.value)}
++                value={data.password}
++                onChange={(e) => setData('password', e.target.value)}
+                 placeholder="Votre mot de passe"
+                 autoComplete="current-password"
+                 required
+@@ -106,48 +75,13 @@ export default function AdminLogin() {
+           <button
+             type="submit"
+             className="btn admin-login-submit"
+-            disabled={loading}
++            disabled={processing}
+           >
+-            <span>{loading ? 'Connexion en cours...' : 'Se connecter'}</span>
++            <span>{processing ? 'Connexion en cours...' : 'Se connecter'}</span>
+             <ArrowRight size={18} />
+           </button>
+         </form>
+ 
+-        {/* Demo Accounts Quick-Select */}
+-        <div className="admin-login-demo-section">
+-          <div className="demo-header">
+-            <ShieldCheck size={16} />
+-            <span>Comptes de test disponibles</span>
+-          </div>
+-          <p className="demo-hint">Cliquez sur un compte pour remplir instantanément les identifiants :</p>
+-          <div className="demo-buttons">
+-            <button
+-              type="button"
+-              className="demo-pill admin"
+-              onClick={() => fillCredentials('admin', 'admin123')}
+-            >
+-              <span className="demo-role">Directrice</span>
+-              <code>admin</code>
+-            </button>
+-            <button
+-              type="button"
+-              className="demo-pill manager"
+-              onClick={() => fillCredentials('manager', 'manager123')}
+-            >
+-              <span className="demo-role">Responsable</span>
+-              <code>manager</code>
+-            </button>
+-            <button
+-              type="button"
+-              className="demo-pill employee"
+-              onClick={() => fillCredentials('employee', 'employee123')}
+-            >
+-              <span className="demo-role">Employée</span>
+-              <code>employee</code>
+-            </button>
+-          </div>
+-        </div>
+-
+         <div className="admin-login-footer">
+           <p>© 2026 Glam'Or Beauty Salon & Spa • Abidjan, Côte d'Ivoire</p>
+         </div>
+diff --git a/resources/js/Pages/admin/AdminOrders.jsx b/resources/js/Pages/admin/AdminOrders.jsx
+index be9e344..1e60679 100644
+--- a/resources/js/Pages/admin/AdminOrders.jsx
++++ b/resources/js/Pages/admin/AdminOrders.jsx
+@@ -20,8 +20,8 @@ import {
+   AlertTriangle,
+   ArrowRight
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminOrders.css';
+ 
+ const ORDER_STATUSES = [
+diff --git a/resources/js/Pages/admin/AdminPayments.jsx b/resources/js/Pages/admin/AdminPayments.jsx
+index 1e7ce55..936b1c5 100644
+--- a/resources/js/Pages/admin/AdminPayments.jsx
++++ b/resources/js/Pages/admin/AdminPayments.jsx
+@@ -16,8 +16,8 @@ import {
+   ShoppingBag,
+   Info
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminPayments.css';
+ 
+ const PAYMENT_METHODS = {
+diff --git a/resources/js/Pages/admin/AdminProducts.jsx b/resources/js/Pages/admin/AdminProducts.jsx
+index 580300a..f622f2c 100644
+--- a/resources/js/Pages/admin/AdminProducts.jsx
++++ b/resources/js/Pages/admin/AdminProducts.jsx
+@@ -17,8 +17,8 @@ import {
+   Star,
+   Sliders
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminProducts.css';
+ 
+ const CATEGORIES = [
+diff --git a/resources/js/Pages/admin/AdminServices.jsx b/resources/js/Pages/admin/AdminServices.jsx
+index a01cf40..9af370f 100644
+--- a/resources/js/Pages/admin/AdminServices.jsx
++++ b/resources/js/Pages/admin/AdminServices.jsx
+@@ -1,6 +1,6 @@
+ import { useState, useMemo } from 'react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import {
+   Scissors,
+   Plus,
+diff --git a/resources/js/Pages/admin/AdminSettings.jsx b/resources/js/Pages/admin/AdminSettings.jsx
+index 4007dc9..30a6c83 100644
+--- a/resources/js/Pages/admin/AdminSettings.jsx
++++ b/resources/js/Pages/admin/AdminSettings.jsx
+@@ -19,8 +19,8 @@ import {
+   MapPin,
+   X
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminSettings.css';
+ 
+ const WEEKDAYS = [
+diff --git a/resources/js/Pages/admin/AdminStaff.jsx b/resources/js/Pages/admin/AdminStaff.jsx
+index 5f4350e..09c128b 100644
+--- a/resources/js/Pages/admin/AdminStaff.jsx
++++ b/resources/js/Pages/admin/AdminStaff.jsx
+@@ -16,8 +16,8 @@ import {
+   Briefcase,
+   AlertCircle
+ } from 'lucide-react';
+-import { useData } from '../../contexts/DataContext';
+-import { useToast } from '../../contexts/ToastContext';
++import { useData } from '../../Contexts/DataContext';
++import { useToast } from '../../Contexts/ToastContext';
+ import './AdminStaff.css';
+ 
+ const WEEKDAYS = [
+diff --git a/resources/js/Pages/admin/Dashboard.jsx b/resources/js/Pages/admin/Dashboard.jsx
+index d9ccdf2..b16b669 100644
+--- a/resources/js/Pages/admin/Dashboard.jsx
++++ b/resources/js/Pages/admin/Dashboard.jsx
+@@ -1,7 +1,7 @@
+ import { useState, useMemo } from 'react';
+ import { Link } from 'react-router-dom';
+-import { useAuth } from '../../contexts/AuthContext';
+-import { useData } from '../../contexts/DataContext';
++import { useAuth } from '../../Contexts/AuthContext';
++import { useData } from '../../Contexts/DataContext';
+ import {
+   TrendingUp,
+   Calendar,
+diff --git a/resources/js/app.jsx b/resources/js/app.jsx
+index 74f5e59..780871b 100644
+--- a/resources/js/app.jsx
++++ b/resources/js/app.jsx
+@@ -3,7 +3,6 @@ import { createRoot } from 'react-dom/client';
+ import '../css/app.css';
+ 
+ import { CartProvider } from './Contexts/CartContext';
+-import { AuthProvider } from './Contexts/AuthContext';
+ import { DataProvider } from './Contexts/DataContext';
+ import { ToastProvider } from './Contexts/ToastContext';
+ import PublicLayout from './Components/layout/PublicLayout';
+@@ -36,14 +35,12 @@ createInertiaApp({
+   },
+   setup({ el, App, props }) {
+     createRoot(el).render(
+-      <DataProvider>
+-        <AuthProvider>
+-          <CartProvider>
+-            <ToastProvider>
+-              <App {...props} />
+-            </ToastProvider>
+-          </CartProvider>
+-        </AuthProvider>
++      <DataProvider initialPage={props.initialPage}>
++        <CartProvider>
++          <ToastProvider>
++            <App {...props} />
++          </ToastProvider>
++        </CartProvider>
+       </DataProvider>
+     );
+   },
+diff --git a/routes/web.php b/routes/web.php
+index ae316ba..f144fdd 100644
+--- a/routes/web.php
++++ b/routes/web.php
+@@ -3,6 +3,7 @@
+ use Illuminate\Support\Facades\Route;
+ use App\Http\Controllers\PublicController;
+ use App\Http\Controllers\AdminController;
++use App\Http\Controllers\AuthController;
+ 
+ /*
+ |--------------------------------------------------------------------------
+@@ -24,14 +25,22 @@
+ |--------------------------------------------------------------------------
+ */
+ Route::prefix('admin')->group(function () {
+-    Route::get('/login', [AdminController::class, 'login'])->name('admin.login');
+-    Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
+-    Route::get('/rendez-vous', [AdminController::class, 'appointments'])->name('admin.appointments');
+-    Route::get('/services', [AdminController::class, 'services'])->name('admin.services');
+-    Route::get('/produits', [AdminController::class, 'products'])->name('admin.products');
+-    Route::get('/commandes', [AdminController::class, 'orders'])->name('admin.orders');
+-    Route::get('/paiements', [AdminController::class, 'payments'])->name('admin.payments');
+-    Route::get('/clientes', [AdminController::class, 'clients'])->name('admin.clients');
+-    Route::get('/personnel', [AdminController::class, 'staff'])->name('admin.staff');
+-    Route::get('/parametres', [AdminController::class, 'settings'])->name('admin.settings');
++    Route::middleware('guest')->group(function () {
++        Route::get('/login', [AuthController::class, 'showLogin'])->name('admin.login');
++        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('admin.login.submit');
++    });
++
++    Route::middleware('auth')->group(function () {
++        Route::post('/logout', [AuthController::class, 'logout'])->name('admin.logout');
++
++        Route::get('/', [AdminController::class, 'dashboard'])->middleware('module:dashboard')->name('admin.dashboard');
++        Route::get('/rendez-vous', [AdminController::class, 'appointments'])->middleware('module:appointments')->name('admin.appointments');
++        Route::get('/services', [AdminController::class, 'services'])->middleware('module:services')->name('admin.services');
++        Route::get('/produits', [AdminController::class, 'products'])->middleware('module:products')->name('admin.products');
++        Route::get('/commandes', [AdminController::class, 'orders'])->middleware('module:orders')->name('admin.orders');
++        Route::get('/paiements', [AdminController::class, 'payments'])->middleware('module:payments')->name('admin.payments');
++        Route::get('/clientes', [AdminController::class, 'clients'])->middleware('module:clients')->name('admin.clients');
++        Route::get('/personnel', [AdminController::class, 'staff'])->middleware('module:staff')->name('admin.staff');
++        Route::get('/parametres', [AdminController::class, 'settings'])->middleware('module:settings')->name('admin.settings');
++    });
+ });
+diff --git a/tests/Feature/AdminAuthTest.php b/tests/Feature/AdminAuthTest.php
+new file mode 100644
+index 0000000..654cc7e
+--- /dev/null
++++ b/tests/Feature/AdminAuthTest.php
+@@ -0,0 +1,71 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\User;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Tests\TestCase;
++
++class AdminAuthTest extends TestCase
++{
++    use RefreshDatabase;
++
++    public function test_guests_are_redirected_to_login(): void
++    {
++        $this->get('/admin')->assertRedirect(route('admin.login'));
++        $this->get('/admin/parametres')->assertRedirect(route('admin.login'));
++    }
++
++    public function test_login_page_is_reachable_by_guests(): void
++    {
++        $this->get('/admin/login')->assertOk();
++    }
++
++    public function test_user_can_log_in_with_valid_credentials(): void
++    {
++        $user = User::factory()->create(['role' => 'admin']);
++
++        $this->post('/admin/login', ['email' => $user->email, 'password' => 'password'])
++            ->assertRedirect(route('admin.dashboard'));
++
++        $this->assertAuthenticatedAs($user);
++    }
++
++    public function test_login_fails_with_wrong_password(): void
++    {
++        $user = User::factory()->create();
++
++        $this->post('/admin/login', ['email' => $user->email, 'password' => 'mauvais'])
++            ->assertSessionHasErrors('email');
++
++        $this->assertGuest();
++    }
++
++    public function test_employee_cannot_access_restricted_modules(): void
++    {
++        $employee = User::factory()->create(['role' => 'employee']);
++
++        $this->actingAs($employee)->get('/admin')->assertOk();
++        $this->actingAs($employee)->get('/admin/rendez-vous')->assertOk();
++        $this->actingAs($employee)->get('/admin/paiements')->assertForbidden();
++        $this->actingAs($employee)->get('/admin/parametres')->assertForbidden();
++    }
++
++    public function test_manager_cannot_access_settings_but_admin_can(): void
++    {
++        $this->actingAs(User::factory()->create(['role' => 'manager']))
++            ->get('/admin/parametres')->assertForbidden();
++
++        $this->actingAs(User::factory()->create(['role' => 'admin']))
++            ->get('/admin/parametres')->assertOk();
++    }
++
++    public function test_user_can_log_out(): void
++    {
++        $this->actingAs(User::factory()->create(['role' => 'admin']))
++            ->post('/admin/logout')
++            ->assertRedirect(route('admin.login'));
++
++        $this->assertGuest();
++    }
++}
+diff --git a/tests/Feature/ExampleTest.php b/tests/Feature/ExampleTest.php
+index 8364a84..22ef0c5 100644
+--- a/tests/Feature/ExampleTest.php
++++ b/tests/Feature/ExampleTest.php
+@@ -2,11 +2,13 @@
+ 
+ namespace Tests\Feature;
+ 
+-// use Illuminate\Foundation\Testing\RefreshDatabase;
++use Illuminate\Foundation\Testing\RefreshDatabase;
+ use Tests\TestCase;
+ 
+ class ExampleTest extends TestCase
+ {
++    use RefreshDatabase;
++
+     /**
+      * A basic test example.
+      */
+diff --git a/tests/Feature/PagesTest.php b/tests/Feature/PagesTest.php
+new file mode 100644
+index 0000000..640acdc
+--- /dev/null
++++ b/tests/Feature/PagesTest.php
+@@ -0,0 +1,127 @@
++<?php
++
++namespace Tests\Feature;
++
++use App\Models\Appointment;
++use App\Models\User;
++use Database\Seeders\DemoDataSeeder;
++use Illuminate\Foundation\Testing\RefreshDatabase;
++use Inertia\Testing\AssertableInertia as Assert;
++use Tests\TestCase;
++
++class PagesTest extends TestCase
++{
++    use RefreshDatabase;
++
++    protected function setUp(): void
++    {
++        parent::setUp();
++        $this->seed(DemoDataSeeder::class);
++    }
++
++    public function test_every_public_page_renders_with_catalog_data(): void
++    {
++        $pages = [
++            '/' => 'Home',
++            '/a-propos' => 'About',
++            '/services' => 'Services',
++            '/boutique' => 'Shop',
++            '/contact' => 'Contact',
++            '/reservation' => 'Booking',
++            '/panier' => 'Cart',
++            '/commande' => 'Checkout',
++        ];
++
++        foreach ($pages as $url => $component) {
++            $this->get($url)->assertInertia(fn (Assert $page) => $page
++                ->component($component, false)
++                ->has('services', 16)
++                ->has('professionals', 4)
++                ->has('products', 12)
++                ->has('settings.name')
++                ->has('settings.openingHours')
++            );
++        }
++    }
++
++    public function test_public_pages_do_not_expose_personal_data(): void
++    {
++        Appointment::create([
++            'reference' => 'RDV-TEST-001',
++            'client_id' => 1,
++            'service_id' => 1,
++            'professional_id' => 1,
++            'date' => now()->addDays(3)->toDateString(),
++            'start_time' => '10:00',
++            'end_time' => '10:45',
++            'price' => 15000,
++            'status' => 'confirmed',
++            'notes' => 'privé',
++        ]);
++
++        $this->get('/reservation')->assertInertia(fn (Assert $page) => $page
++            ->has('professionals.0', fn (Assert $pro) => $pro
++                ->missing('email')
++                ->missing('phone')
++                ->etc()
++            )
++            ->has('busySlots.0', fn (Assert $slot) => $slot
++                ->missing('client_id')
++                ->missing('notes')
++                ->missing('price')
++                ->etc()
++            )
++            ->missing('clients')
++            ->missing('orders')
++            ->missing('transactions')
++        );
++    }
++
++    public function test_admin_pages_receive_their_data(): void
++    {
++        $admin = User::factory()->create(['role' => 'admin']);
++
++        $this->actingAs($admin)->get('/admin/rendez-vous')->assertInertia(fn (Assert $page) => $page
++            ->component('admin/AdminAppointments', false)
++            ->has('appointments', 8)
++            ->has('clients', 6)
++        );
++
++        $this->actingAs($admin)->get('/admin/commandes')->assertInertia(fn (Assert $page) => $page
++            ->component('admin/AdminOrders', false)
++            ->has('orders', 5)
++            ->has('orders.0.items')
++        );
++
++        $this->actingAs($admin)->get('/admin/paiements')->assertInertia(fn (Assert $page) => $page
++            ->has('transactions', 5)
++        );
++
++        $this->actingAs($admin)->get('/admin/personnel')->assertInertia(fn (Assert $page) => $page
++            ->has('professionals.0.email')
++        );
++    }
++
++    public function test_employee_dashboard_does_not_receive_financial_or_client_data(): void
++    {
++        $employee = User::factory()->create(['role' => 'employee']);
++
++        $this->actingAs($employee)->get('/admin')->assertInertia(fn (Assert $page) => $page
++            ->component('admin/Dashboard', false)
++            ->has('appointments', 8)
++            ->has('orders', 0)
++            ->has('transactions', 0)
++            ->has('clients', 0)
++        );
++    }
++
++    public function test_seeder_is_idempotent(): void
++    {
++        $this->seed(DemoDataSeeder::class);
++
++        $this->assertDatabaseCount('services', 16);
++        $this->assertDatabaseCount('appointments', 8);
++        $this->assertDatabaseCount('order_items', 10);
++        $this->assertDatabaseCount('users', 3);
++    }
++}
+diff --git a/vite.config.js b/vite.config.js
+index 4ee0b1b..ea4167b 100644
+--- a/vite.config.js
++++ b/vite.config.js
+@@ -2,6 +2,9 @@ import { defineConfig } from 'vite';
+ import laravel from 'laravel-vite-plugin';
+ import react from '@vitejs/plugin-react';
+ import path from 'path';
++import { fileURLToPath } from 'url';
++
++const __dirname = path.dirname(fileURLToPath(import.meta.url));
+ 
+ export default defineConfig({
+     plugins: [

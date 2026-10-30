@@ -1,48 +1,17 @@
-import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useToast } from '../../contexts/ToastContext';
-import { Sparkles, Lock, User, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
+import { useForm } from '@inertiajs/react';
+import { Sparkles, Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 import './AdminLogin.css';
 
 export default function AdminLogin() {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const { login } = useAuth();
-  const { success } = useToast();
-  const navigate = useNavigate();
-  const location = useLocation();
-
-  const from = location.state?.from?.pathname || '/admin';
+  const { data, setData, post, processing, errors } = useForm({
+    email: '',
+    password: '',
+    remember: false,
+  });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    setError('');
-
-    if (!username.trim() || !password.trim()) {
-      setError('Veuillez renseigner votre nom d’utilisateur et mot de passe.');
-      return;
-    }
-
-    setLoading(true);
-    const result = login(username.trim(), password);
-
-    if (result.success) {
-      success(`Bienvenue, ${result.user.name} !`);
-      navigate(from, { replace: true });
-    } else {
-      setError(result.error || 'Identifiants incorrects. Veuillez réessayer.');
-      setLoading(false);
-    }
-  };
-
-  const fillCredentials = (user, pass) => {
-    setUsername(user);
-    setPassword(pass);
-    setError('');
+    post('/admin/login');
   };
 
   return (
@@ -62,25 +31,25 @@ export default function AdminLogin() {
         </div>
 
         {/* Error Alert */}
-        {error && (
+        {(errors.email || errors.password) && (
           <div className="admin-login-alert">
             <AlertCircle size={18} />
-            <span>{error}</span>
+            <span>{errors.email || errors.password}</span>
           </div>
         )}
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="admin-login-form">
           <div className="admin-login-group">
-            <label htmlFor="username">Identifiant / Nom d'utilisateur</label>
+            <label htmlFor="email">Adresse e-mail</label>
             <div className="admin-login-input-wrap">
-              <User size={18} className="input-icon" />
+              <Mail size={18} className="input-icon" />
               <input
-                id="username"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Ex: admin, manager, employee"
+                id="email"
+                type="email"
+                value={data.email}
+                onChange={(e) => setData('email', e.target.value)}
+                placeholder="vous@glamor-beauty.com"
                 autoComplete="username"
                 required
               />
@@ -94,8 +63,8 @@ export default function AdminLogin() {
               <input
                 id="password"
                 type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                value={data.password}
+                onChange={(e) => setData('password', e.target.value)}
                 placeholder="Votre mot de passe"
                 autoComplete="current-password"
                 required
@@ -106,47 +75,12 @@ export default function AdminLogin() {
           <button
             type="submit"
             className="btn admin-login-submit"
-            disabled={loading}
+            disabled={processing}
           >
-            <span>{loading ? 'Connexion en cours...' : 'Se connecter'}</span>
+            <span>{processing ? 'Connexion en cours...' : 'Se connecter'}</span>
             <ArrowRight size={18} />
           </button>
         </form>
-
-        {/* Demo Accounts Quick-Select */}
-        <div className="admin-login-demo-section">
-          <div className="demo-header">
-            <ShieldCheck size={16} />
-            <span>Comptes de test disponibles</span>
-          </div>
-          <p className="demo-hint">Cliquez sur un compte pour remplir instantanément les identifiants :</p>
-          <div className="demo-buttons">
-            <button
-              type="button"
-              className="demo-pill admin"
-              onClick={() => fillCredentials('admin', 'admin123')}
-            >
-              <span className="demo-role">Directrice</span>
-              <code>admin</code>
-            </button>
-            <button
-              type="button"
-              className="demo-pill manager"
-              onClick={() => fillCredentials('manager', 'manager123')}
-            >
-              <span className="demo-role">Responsable</span>
-              <code>manager</code>
-            </button>
-            <button
-              type="button"
-              className="demo-pill employee"
-              onClick={() => fillCredentials('employee', 'employee123')}
-            >
-              <span className="demo-role">Employée</span>
-              <code>employee</code>
-            </button>
-          </div>
-        </div>
 
         <div className="admin-login-footer">
           <p>© 2026 Glam'Or Beauty Salon & Spa • Abidjan, Côte d'Ivoire</p>

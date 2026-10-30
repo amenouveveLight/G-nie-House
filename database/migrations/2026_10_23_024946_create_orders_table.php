@@ -18,8 +18,8 @@ return new class extends Migration
             $table->integer('total');
             $table->string('delivery_method')->default('pickup'); // delivery, pickup
             $table->json('shipping_address')->nullable();
-            $table->string('order_status')->default('en_attente_paiement'); // en_attente_paiement, payee, en_preparation, expediee, terminee, annulee, remboursee
-            $table->string('payment_status')->default('pending'); // pending, success, failed, refunded
+            $table->string('order_status')->default('pending'); // pending, processing, shipped, delivered, cancelled
+            $table->string('payment_status')->default('pending'); // pending, paid, refunded
             $table->string('payment_method')->nullable(); // card, mobile_money, cash
             $table->timestamps();
         });

@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
-import { useData } from '../../contexts/DataContext';
+import { useAuth } from '../../Contexts/AuthContext';
+import { useData } from '../../Contexts/DataContext';
 import {
   TrendingUp,
   Calendar,

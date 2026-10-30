@@ -12,10 +12,10 @@ import {
   Calendar,
   CheckCircle2
 } from 'lucide-react';
-import { services as defaultServices, products as defaultProducts } from '../data/demoData';
-import { useData } from '../contexts/DataContext';
-import { useCart } from '../contexts/CartContext';
-import { useToast } from '../contexts/ToastContext';
+import { services as defaultServices, products as defaultProducts } from '../Data/demoData';
+import { useData } from '../Contexts/DataContext';
+import { useCart } from '../Contexts/CartContext';
+import { useToast } from '../Contexts/ToastContext';
 import './Home.css';
 
 const formatPrice = (price) => {

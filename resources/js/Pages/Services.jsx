@@ -14,11 +14,7 @@ import {
   ArrowRight,
   Info
 } from 'lucide-react';
-import { 
-  services as defaultServices, 
-  professionals as defaultProfessionals 
-} from '../data/demoData';
-import { useData } from '../contexts/DataContext';
+import { useData } from '../Contexts/DataContext';
 import './Services.css';
 
 const formatPrice = (price) => {
@@ -40,17 +36,17 @@ const categoryIcons = {
 };
 
 export default function Services() {
+  const { services, professionals } = useData();
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const data = useData();
 
   const servicesList = useMemo(() => {
-    return (data?.services || defaultServices).filter(s => s.status === 'active');
-  }, [data?.services]);
+    return services.filter(s => s.status === 'active');
+  }, [services]);
 
   const professionalsList = useMemo(() => {
-    return (data?.professionals || defaultProfessionals).filter(p => p.status === 'active');
-  }, [data?.professionals]);
+    return professionals.filter(p => p.status === 'active');
+  }, [professionals]);
 
   // Read initial category from query param
   const initialCategory = searchParams.get('category') || 'all';

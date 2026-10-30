@@ -12,10 +12,10 @@ import {
   Truck,
   RotateCcw
 } from 'lucide-react';
-import { products as defaultProducts } from '../data/demoData';
-import { useData } from '../contexts/DataContext';
-import { useCart } from '../contexts/CartContext';
-import { useToast } from '../contexts/ToastContext';
+import { products as defaultProducts } from '../Data/demoData';
+import { useData } from '../Contexts/DataContext';
+import { useCart } from '../Contexts/CartContext';
+import { useToast } from '../Contexts/ToastContext';
 import './Shop.css';
 
 const formatPrice = (price) => {

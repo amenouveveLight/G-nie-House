@@ -990,36 +990,6 @@ export const salonSettings = {
 // ==========================================
 // 10. COMPTES DE DÉMONSTRATION
 // ==========================================
-export const demoAccounts = [
-  {
-    id: 1,
-    username: 'admin',
-    password: 'admin123',
-    role: 'admin',
-    name: 'Directrice du Salon',
-    email: 'directrice@glamor-beauty.com',
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 2,
-    username: 'manager',
-    password: 'manager123',
-    role: 'manager',
-    name: 'Responsable Opérationnelle',
-    email: 'manager@glamor-beauty.com',
-    avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80'
-  },
-  {
-    id: 3,
-    username: 'employee',
-    password: 'employee123',
-    role: 'employee',
-    name: 'Aminata Diallo',
-    email: 'aminata.diallo@glamor-beauty.com',
-    professionalId: 1,
-    avatar: 'https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?w=150&auto=format&fit=crop&q=80'
-  }
-];
 
 // ==========================================
 // 11. NOTIFICATIONS
@@ -1032,7 +1002,7 @@ export const notifications = [
     message: 'Le rendez-vous RDV-2026-006 pour Olivia N\'Guessan a été confirmé avec Aminata Diallo pour le 15 Oct.',
     date: '2026-10-11T08:50:00Z',
     read: false,
-    link: '/admin/appointments'
+    link: '/admin/rendez-vous'
   },
   {
     id: 2,
@@ -1041,7 +1011,7 @@ export const notifications = [
     message: 'Le produit "Crème Mains Veloutée Hydratation Intense" est actuellement en rupture de stock (0 unité).',
     date: '2026-10-11T09:15:00Z',
     read: false,
-    link: '/admin/products'
+    link: '/admin/produits'
   },
   {
     id: 3,
@@ -1050,7 +1020,7 @@ export const notifications = [
     message: 'Commande CMD-2026-004 de 38 050 FCFA passée par Esther Ouloto (Paiement Mobile Money validé).',
     date: '2026-10-11T10:12:00Z',
     read: true,
-    link: '/admin/orders'
+    link: '/admin/commandes'
   },
   {
     id: 4,
@@ -1059,7 +1029,7 @@ export const notifications = [
     message: 'Le stock de "Spray Fraîcheur & Décongestion" est tombé à 2 unités (seuil d\'alerte : 5).',
     date: '2026-10-10T16:00:00Z',
     read: true,
-    link: '/admin/products'
+    link: '/admin/produits'
   },
   {
     id: 5,
@@ -1068,7 +1038,7 @@ export const notifications = [
     message: 'Kady Traoré a annulé son rendez-vous RDV-2026-008 du 12 Octobre.',
     date: '2026-10-10T11:20:00Z',
     read: true,
-    link: '/admin/appointments'
+    link: '/admin/rendez-vous'
   }
 ];
 
@@ -1085,7 +1055,6 @@ const demoData = {
   transactions,
   stockMovements,
   salonSettings,
-  demoAccounts,
   notifications
 };
 

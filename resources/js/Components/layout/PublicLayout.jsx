@@ -2,6 +2,7 @@ import React from 'react';
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
+import ServerHydrator from '../common/ServerHydrator';
 import './PublicLayout.css';
 
 export default function PublicLayout({ children }) {
@@ -14,6 +15,7 @@ export default function PublicLayout({ children }) {
 
   return (
     <div className="public-layout-root">
+      <ServerHydrator />
       <Header />
       <main className="public-main-content" id="main-content">
         {children}

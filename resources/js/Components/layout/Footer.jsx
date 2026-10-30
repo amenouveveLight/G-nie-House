@@ -11,8 +11,8 @@ import {
   Shield
 } from 'lucide-react';
 import { Instagram, Facebook } from '../common/SocialIcons';
-import { salonSettings } from '../../data/demoData';
-import { useData } from '../../contexts/DataContext';
+import { salonSettings } from '../../Data/demoData';
+import { useData } from '../../Contexts/DataContext';
 import './Footer.css';
 
 export default function Footer() {

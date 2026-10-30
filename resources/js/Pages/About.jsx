@@ -11,8 +11,8 @@ import {
   Camera,
   Scissors
 } from 'lucide-react';
-import { professionals as defaultProfessionals } from '../data/demoData';
-import { useData } from '../contexts/DataContext';
+import { professionals as defaultProfessionals } from '../Data/demoData';
+import { useData } from '../Contexts/DataContext';
 import './About.css';
 
 const valuesList = [

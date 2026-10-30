@@ -1,98 +1,35 @@
-import { createContext, useContext, useReducer, useCallback } from 'react';
-import { demoAccounts } from '../data/demoData';
+import { router, usePage } from '@inertiajs/react';
 
-const AuthContext = createContext();
+// Modules accessibles par rôle. Ceci ne sert qu'à adapter l'interface :
+// l'autorisation réelle est appliquée côté serveur (middleware `module`).
+const ROLE_MODULES = {
+  admin: ['*'],
+  manager: ['dashboard', 'appointments', 'services', 'products', 'orders', 'payments', 'clients', 'staff'],
+  employee: ['dashboard', 'appointments'],
+};
 
-const STORAGE_KEY = 'glamor_auth';
+/**
+ * Utilisateur authentifié, fourni par Laravel via les props partagées Inertia.
+ * À utiliser dans les pages et layouts (à l'intérieur de <App />).
+ */
+export function useAuth() {
+  const user = usePage().props.auth?.user ?? null;
 
-function loadAuth() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    return saved ? JSON.parse(saved) : { user: null, isAuthenticated: false };
-  } catch {
-    return { user: null, isAuthenticated: false };
-  }
-}
+  const hasPermission = (module) => {
+    if (!user) return false;
+    const modules = ROLE_MODULES[user.role] ?? [];
+    return modules.includes('*') || modules.includes(module);
+  };
 
-function authReducer(state, action) {
-  let newState;
-  switch (action.type) {
-    case 'LOGIN':
-      newState = { user: action.payload, isAuthenticated: true };
-      break;
-    case 'LOGOUT':
-      newState = { user: null, isAuthenticated: false };
-      break;
-    default:
-      return state;
-  }
-  try {
-    if (newState.isAuthenticated) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newState));
-    } else {
-      localStorage.removeItem(STORAGE_KEY);
-    }
-  } catch { /* silently fail */ }
-  return newState;
-}
+  // Rechargement complet après déconnexion : vide les données chargées en mémoire.
+  const logout = () => router.post('/admin/logout', {}, {
+    onFinish: () => window.location.assign('/admin/login'),
+  });
 
-export function AuthProvider({ children }) {
-  const [state, dispatch] = useReducer(authReducer, null, loadAuth);
-
-  const login = useCallback((username, password) => {
-    const account = demoAccounts.find(
-      a => a.username === username && a.password === password
-    );
-    if (account) {
-      dispatch({
-        type: 'LOGIN',
-        payload: {
-          username: account.username,
-          name: account.name,
-          role: account.role,
-          professionalId: account.professionalId || null
-        }
-      });
-      return { success: true, user: account };
-    }
-    return { success: false, error: 'Identifiants incorrects' };
-  }, []);
-
-  const logout = useCallback(() => {
-    dispatch({ type: 'LOGOUT' });
-  }, []);
-
-  const hasPermission = useCallback((module) => {
-    if (!state.user) return false;
-    const { role } = state.user;
-    if (role === 'admin') return true;
-
-    const managerModules = ['dashboard', 'appointments', 'services', 'products', 'orders', 'payments', 'clients', 'staff'];
-    if (role === 'manager') return managerModules.includes(module);
-
-    const employeeModules = ['dashboard', 'appointments'];
-    if (role === 'employee') return employeeModules.includes(module);
-
-    return false;
-  }, [state.user]);
-
-  const value = {
-    user: state.user,
-    isAuthenticated: state.isAuthenticated,
-    login,
+  return {
+    user: user && { ...user, professionalId: user.professional_id },
+    isAuthenticated: !!user,
     logout,
     hasPermission,
   };
-
-  return (
-    <AuthContext.Provider value={value}>
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error('useAuth must be used within AuthProvider');
-  return context;
 }

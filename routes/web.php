@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\PublicController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\AuthController;
 
 /*
 |--------------------------------------------------------------------------
@@ -24,14 +25,22 @@ Route::get('/commande', [PublicController::class, 'checkout'])->name('checkout')
 |--------------------------------------------------------------------------
 */
 Route::prefix('admin')->group(function () {
-    Route::get('/login', [AdminController::class, 'login'])->name('admin.login');
-    Route::get('/', [AdminController::class, 'dashboard'])->name('admin.dashboard');
-    Route::get('/rendez-vous', [AdminController::class, 'appointments'])->name('admin.appointments');
-    Route::get('/services', [AdminController::class, 'services'])->name('admin.services');
-    Route::get('/produits', [AdminController::class, 'products'])->name('admin.products');
-    Route::get('/commandes', [AdminController::class, 'orders'])->name('admin.orders');
-    Route::get('/paiements', [AdminController::class, 'payments'])->name('admin.payments');
-    Route::get('/clientes', [AdminController::class, 'clients'])->name('admin.clients');
-    Route::get('/personnel', [AdminController::class, 'staff'])->name('admin.staff');
-    Route::get('/parametres', [AdminController::class, 'settings'])->name('admin.settings');
+    Route::middleware('guest')->group(function () {
+        Route::get('/login', [AuthController::class, 'showLogin'])->name('admin.login');
+        Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('admin.login.submit');
+    });
+
+    Route::middleware('auth')->group(function () {
+        Route::post('/logout', [AuthController::class, 'logout'])->name('admin.logout');
+
+        Route::get('/', [AdminController::class, 'dashboard'])->middleware('module:dashboard')->name('admin.dashboard');
+        Route::get('/rendez-vous', [AdminController::class, 'appointments'])->middleware('module:appointments')->name('admin.appointments');
+        Route::get('/services', [AdminController::class, 'services'])->middleware('module:services')->name('admin.services');
+        Route::get('/produits', [AdminController::class, 'products'])->middleware('module:products')->name('admin.products');
+        Route::get('/commandes', [AdminController::class, 'orders'])->middleware('module:orders')->name('admin.orders');
+        Route::get('/paiements', [AdminController::class, 'payments'])->middleware('module:payments')->name('admin.payments');
+        Route::get('/clientes', [AdminController::class, 'clients'])->middleware('module:clients')->name('admin.clients');
+        Route::get('/personnel', [AdminController::class, 'staff'])->middleware('module:staff')->name('admin.staff');
+        Route::get('/parametres', [AdminController::class, 'settings'])->middleware('module:settings')->name('admin.settings');
+    });
 });

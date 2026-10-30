@@ -12,10 +12,10 @@ import {
   CheckCircle2,
   AlertCircle
 } from 'lucide-react';
-import { Instagram, Facebook } from '../components/common/SocialIcons';
-import { salonSettings as defaultSettings } from '../data/demoData';
-import { useData } from '../contexts/DataContext';
-import { useToast } from '../contexts/ToastContext';
+import { Instagram, Facebook } from '../Components/common/SocialIcons';
+import { salonSettings as defaultSettings } from '../Data/demoData';
+import { useData } from '../Contexts/DataContext';
+import { useToast } from '../Contexts/ToastContext';
 import './Contact.css';
 
 const daysTranslation = {
